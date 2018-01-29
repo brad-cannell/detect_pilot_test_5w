@@ -1,0 +1,11 @@
+/*
+Custom CSS for DETECT pilot test analysis vignettes
+*/
+
+/*
+Setting the color of the horizontal rule elements to blue
+*/
+hr {
+  background-color: #66b3ff;
+  height: 1px;
+}

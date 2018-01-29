@@ -1,0 +1,215 @@
+---
+title: "Descriptive Analysis of Matched Screenings"
+date: "Created: 2016-03-05 <br> Updated: `r Sys.Date()`"
+output: 
+  html_notebook:
+    css: detect_pilot_css.css
+description: In this analysis, we only used data from DETECT screenings that we were able to match to APS investigations. We calculate some basic descriptive statistics about the older adults who were screened. We also calculate some basic descriptive statistics about the various parameters of the investigations (i.e., allegations, perpetrators, and dispositions).
+---
+
+`r rmarkdown::metadata$description`
+
+-------------------------------------------------------------------------------
+
+```{r setup, include = FALSE}
+Sys.setenv(TZ = "US/Central")
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r load_packages, message=FALSE}
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(stringr)
+library(bfuncs) # devtools::install_github("brad-cannell/bfuncs")
+```
+
+# Load data
+
+merged_screening_recode.RData was created in preprocess_for_analysis.Rmd
+
+```{r}
+merged <- read_rds("/Users/bradcannell/Desktop/merged.RData")
+about_data(merged) # 67 observations and 57 variables
+```
+
+How many unique investigations are there?
+
+```{r}
+unique(merged$group) %>% length() # 46 unique investigations
+```
+
+The `r length(unique(merged$group))` above goes in the tier 2 box on the DETECT Pilot Screening-Investigation Merge Flow Chart.
+
+-------------------------------------------------------------------------------
+
+# Calculate descriptive statistics of interest
+
+Because it is possible for there to be more than one allegation associated with each APS investigation, some people have more than one row in the data. It is also possible to have more than one instance of the DETECT screening tool used (response number) per APS investigation (case number).
+
+We want our statistics calculated at the screening/investigation combination (group) level.
+
+```{r}
+grouped <- merged %>% 
+  group_by(group) %>% 
+  mutate(row = row_number())
+```
+
+## Mean age of victim
+
+```{r}
+grouped %>%
+  ungroup() %>% 
+  filter(row == 1) %>% 
+  mean_table(age)
+```
+
+## Mean time between screening and APS investigation
+
+```{r}
+grouped %>%
+  ungroup() %>% 
+  filter(row == 1) %>% 
+  mean_table(time_diff)
+```
+
+## Mean number of allegations investigated
+
+```{r}
+grouped %>%
+  summarise(n_allegations = n()) %>% 
+  ungroup() %>% 
+  mean_table(n_allegations)
+```
+
+## Most common allegation investigated
+
+There are six possible [allegations](https://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_1340.asp). What proportion of groups included each type?
+
+```{r}
+allegations <- grouped %>% 
+  select(row, group, allegation) %>% 
+  mutate(
+    `Emotional-Verbal Abuse` = if_else(any(allegation == "Emot/Verbl Abuse"), 1L, 0L),
+    `Physical Abuse`         = if_else(any(allegation == "Physical Abuse"), 1L, 0L),
+    `Physical Neglect`       = if_else(any(allegation == "Physical Neglect"), 1L, 0L),
+    `Mental Health Neglect`  = if_else(any(allegation == "Men Health Neg."), 1L, 0L),
+    `Medical Neglect`        = if_else(any(allegation == "Medical Neglect"), 1L, 0L),
+    Exploitation             = if_else(any(allegation == "Exploitation"), 1L, 0L)
+  ) %>% 
+  
+  # Can now reduce to one row per group
+  filter(row == 1) %>% 
+  ungroup() %>% 
+  select(-(row:allegation))
+```
+
+```{r rows.print=12}
+vars <- quos(`Emotional-Verbal Abuse`, `Physical Abuse`, `Physical Neglect`, 
+             `Mental Health Neglect`, `Medical Neglect`, Exploitation)
+
+allegations_summary <- map_df(vars, ~ {
+  allegations %>%
+    group_by(!! .x) %>%
+    freq_table()
+})
+
+allegations_summary %>%   
+  filter(cat == 1) %>% 
+  arrange(desc(percent))
+```
+
+## Frequency of perpetrator type
+
+There are two possible perpetrators. What proportion of groups included each type?
+
+```{r}
+perps <- grouped %>% 
+  select(row, group, perp) %>% 
+  mutate(
+    Other = if_else(any(perp == "Perpetrator"), 1L, 0L),
+    Self  = if_else(any(perp == "Self"), 1L, 0L)
+  ) %>% 
+  
+  # Can now reduce to one row per group
+  filter(row == 1) %>% 
+  ungroup() %>% 
+  select(-(row:perp))
+```
+
+```{r}
+vars <- quos(Other, Self)
+
+perps_summary <- map_df(vars, ~ {
+  perps %>%
+    group_by(!! .x) %>%
+    freq_table()
+})
+
+perps_summary %>% 
+  filter(cat == 1)
+```
+
+## Frequency of dispositions
+
+There are four possible [dispositions](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2700.asp#APS_2700). What proportion of groups included each type?
+
+```{r}
+dispositions <- grouped %>% 
+  select(row, group, disposition) %>% 
+  mutate(
+    `Unable to Determine` = if_else(any(disposition == "Unable to Determine"), 1L, 0L),
+    Valid                 = if_else(any(disposition == "Valid"), 1L, 0L),
+    Invalid               = if_else(any(disposition == "Invalid"), 1L, 0L),
+    Other                 = if_else(any(disposition == "Other"), 1L, 0L)
+  ) %>% 
+  
+  # Can now reduce to one row per group
+  filter(row == 1) %>% 
+  ungroup() %>% 
+  select(-(row:disposition))
+```
+
+```{r}
+vars <- quos(`Unable to Determine`, Valid, Invalid, Other)
+
+dispositions_summary <- map_df(vars, ~ {
+  dispositions %>%
+    group_by(!! .x) %>%
+    freq_table()
+})
+
+dispositions_summary %>% 
+  filter(cat == 1)
+```
+
+## Percent of all allegations that were valid
+
+```{r}
+merged %>% 
+  group_by(disposition) %>% 
+  freq_table()
+```
+
+
+
+-------------------------------------------------------------------------------
+
+# Summary
+
+There were 46 unique DETECT screenings that we were able to link with an APS investigation (Figure 1). It was possible for more than one allegation (e.g., physical neglect and verbal abuse) to be investigated at each investigation. On average, each APS investigation was initiated 6.5 days after the DETECT screening tool was used and 1.5 allegations were investigated. The most common allegation investigated was physical neglect -- 43 (93.5%) included an allegation of physical neglect. Further, it was more common for EA to be self-perpetrated than perpetrated than perpetrated by someone else in a position of trust. Of the 46 investigations, 40 (87%) included at least one allegation of self-perpetrated EA, compared to 13 (28%) investigations that included at least one allegation of EA perpetrated by someone else. APS determined that 42% of all individual allegations of abuse or neglect were valid, and in 26 (57%) of the 46 investigations APS determined that at least one allegation was valid. The mean age of the victim was 75 years old (range = 66 to 94).
+
+```{r echo=FALSE}
+# Clean up
+rm(allegations, allegations_summary, perps, perps_summary, dispositions, 
+   dispositions_summary, vars)
+```
+
+
+#### Session Info:
+```{r session_info, echo=FALSE}
+sessionInfo()
+```

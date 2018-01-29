@@ -1,0 +1,272 @@
+---
+title: "Cleaning APS Data for Analysis"
+date: "Created: 2017-01-22 <br> Updated: `r Sys.Date()`"
+output: 
+  html_notebook:
+    css: detect_pilot_css.css
+---
+
+```{r setup, echo = FALSE}
+Sys.setenv(TZ = "US/Central")
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+-------------------------------------------------------------------------------
+
+```{r load_packages, message=FALSE}
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(stringr)
+library(bfuncs) # devtools::install_github("brad-cannell/bfuncs")
+```
+
+# Import APS data (Client Info)   
+
+```{r import_client_info}
+col_info <- c( 
+# "col_name",     "col_type"
+  "case_num",     "text",
+  "intake_stage", "text",
+  "intake_start", "date",
+  "full_name",    "text",
+  "first_name",   "text",
+  "middle_name",  "text",
+  "last_name",    "text",
+  "age",          "numeric",
+  "dob",          "date",
+  "county",       "text",
+  "address",      "text",
+  "city",         "text",
+  "zip",          "text")
+
+path <- "/Users/bradcannell/Desktop/APS In-Home Intakes of Clients Age 65 or Over in Denton Johnson or Tarrant Counties.xlsx"
+
+# Import data
+client_data <- read_excel(
+  path = path,
+  sheet = "Client Data",
+  col_names = col_info[seq(1, length(col_info), 2)],
+  col_types = col_info[seq(2, length(col_info), 2)],
+  skip = 6)
+
+rm(col_info, path)
+```
+
+## Check for duplicate rows by case number
+
+```{r}
+sum(duplicated(client_data$case_num)) # 68
+```
+
+## Check for duplicate rows by case number and intake_stage
+
+```{r}
+dups <- paste0(client_data$case_num, client_data$intake_stage)
+sum(duplicated(dups)) # None
+```
+
+# Check dates
+
+```{r}
+min(client_data$intake_start)
+max(client_data$intake_start)
+# 2015-09-17 to 2015-11-05
+```
+
+```{}
+about_data(client_data)
+rm(dups)
+```
+
+#### 747 observations and 13 variables in the data
+
+-------------------------------------------------------------------------------
+
+# Import APS data ([Allegations](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_1340.asp#APS_1340))   
+
+```{r import_allegations}
+col_info <- c( 
+# "col_name",     "col_type"
+  "case_num",     "text",
+  "intake_stage", "text",
+  "allegation",   "text",
+  "perp",         "text",
+  "perp_id",      "text",
+  "ghost1",       "blank",
+  "ghost2",       "blank",
+  "ghost3",       "blank",
+  "ghost4",       "blank",
+  "ghost5",       "blank")
+
+# Import data
+allegations <- read_excel(
+  path = "/Users/bradcannell/Desktop/APS In-Home Intakes of Clients Age 65 or Over in Denton Johnson or Tarrant Counties.xlsx",
+  sheet = "Allegations",
+  col_names = col_info[seq(1, length(col_info), 2)],
+  col_types = col_info[seq(2, length(col_info), 2)],
+  skip = 6)
+
+# Check for duplicate rows by case number
+sum(duplicated(allegations$case_num)) 
+# 408 (816)
+
+# Check for duplicate rows by case number and intake stage
+dups <- paste0(allegations$case_num, allegations$intake_stage)
+sum(duplicated(dups))
+# 340 (680)
+
+# Check for duplicate rows by case number, intake stage, and allegation
+dups <- paste0(allegations$case_num, allegations$intake_stage, allegations$allegation)
+sum(duplicated(dups)) 
+# 90 (180)
+
+# Check for duplicate rows by case number, intake stage, allegation, and perp
+dups <- paste0(allegations$case_num, allegations$intake_stage, allegations$allegation, allegations$perp)
+sum(duplicated(dups)) 
+# 36 (72)
+
+# Check for duplicate rows by all vars
+sum(duplicated(allegations)) 
+# None
+
+# Manually check the 72 from the step above
+dups <- paste0(allegations$case_num, allegations$intake_stage, allegations$allegation, allegations$perp)
+index <- which(duplicated(dups))
+
+# At this point, perp_id isn't meaningful in the absence of other differences between rows. Therefore, I'm going to drop rows that differ only by perp_id.
+allegations <- allegations[-index, ]
+
+about_data(allegations)
+rm(col_info, dups, index)
+```
+
+#### 1,051 observations and 5 variables in the data
+
+-------------------------------------------------------------------------------
+
+# Import APS data ([Closure Reason](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2800.asp#APS_2900))   
+
+```{r import_closure_reason}
+col_info <- c( 
+# "col_name",       "col_type"
+  "case_num",       "text",
+  "intake_stage",   "text",
+  "closure_reason", "text",
+  "ghost1",         "blank",
+  "ghost2",         "blank",
+  "ghost3",         "blank",
+  "ghost4",         "blank",
+  "ghost5",         "blank",
+  "ghost6",         "blank",
+  "ghost7",         "blank")
+
+# Import data
+closure <- read_excel(
+  path = "/Users/bradcannell/Desktop/APS In-Home Intakes of Clients Age 65 or Over in Denton Johnson or Tarrant Counties.xlsx",
+  sheet = "Closure Reason",
+  col_names = col_info[seq(1, length(col_info), 2)],
+  col_types = col_info[seq(2, length(col_info), 2)],
+  skip = 7)
+
+# Check for duplicate rows by case number
+sum(duplicated(closure$case_num)) 
+# 68 (136)
+
+# Check for duplicate rows by case number and intake stage
+dups <- paste0(closure$case_num, closure$intake_stage)
+sum(duplicated(dups)) 
+# 0
+
+about_data(closure)
+rm(col_info, dups)
+```
+
+#### 747 observations and 3 variables in the data
+
+-------------------------------------------------------------------------------
+
+# Import APS data ([Allegation Disposition](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2700.asp#APS_2700)   
+
+```{r import_allegation_disposition}
+col_info <- c( 
+# "col_name",    "col_type"
+  "case_num",    "text",
+  "allegation",  "text",
+  "perp",        "text",
+  "perp_id",     "text",
+  "disposition", "text",
+  "ghost1",      "blank",
+  "ghost2",      "blank",
+  "ghost3",      "blank",
+  "ghost4",      "blank",
+  "ghost5",      "blank")
+
+# Import data
+disposition <- read_excel(
+  path = "/Users/bradcannell/Desktop/APS In-Home Intakes of Clients Age 65 or Over in Denton Johnson or Tarrant Counties.xlsx",
+  sheet = "Allegation Disposition",
+  col_names = col_info[seq(1, length(col_info), 2)],
+  col_types = col_info[seq(2, length(col_info), 2)],
+  skip = 6)
+
+# Drop final row - was a note in the excel sheet
+row <- nrow(disposition)
+disposition <- disposition[-row,]
+
+# Check for duplicate rows by case number
+sum(duplicated(disposition$case_num)) 
+# 455 (910)
+
+# Check for duplicate rows by case number and allegation
+dups <- paste0(disposition$case_num, disposition$allegation)
+sum(duplicated(dups)) 
+# 140 (280)
+
+# Check for duplicate rows by case number, allegation, and perp
+dups <- paste0(disposition$case_num, disposition$allegation, disposition$perp)
+sum(duplicated(dups)) 
+# 62 (124)
+
+# Check for duplicate rows by case number, allegation, perp, and perp id
+dups <- paste0(disposition$case_num, disposition$allegation, disposition$perp, disposition$perp_id)
+sum(duplicated(dups)) 
+# 6 (12)
+
+# Check for duplicate rows by all vars
+sum(duplicated(disposition)) 
+# 6 (12)
+
+# Manually check the 12 duplicate rows
+dups <- paste0(disposition$case_num, disposition$allegation, disposition$perp, disposition$perp_id)
+index <- which(duplicated(dups))
+
+# Truly duplicates. Drop
+disposition <- disposition[-index, ]
+
+about_data(disposition)
+rm(col_info, row, dups, index)
+```
+
+#### 1,128 observations and 5 variables in the data
+
+```{r save_to_desktop, echo=FALSE}
+save(client_data, file = "/Users/bradcannell/Desktop/client_data.RData")
+save(allegations, file = "/Users/bradcannell/Desktop/allegations.RData")
+save(closure, file = "/Users/bradcannell/Desktop/closure.RData")
+save(disposition, file = "/Users/bradcannell/Desktop/disposition.RData")
+```
+
+-------------------------------------------------------------------------------
+
+#### Session Info:
+```{r session_info, echo=FALSE}
+sessionInfo()
+```
+
+```{r export, echo=FALSE, eval=FALSE}
+# Keeping around just in case
+medstar$dob2 <- as.Date(medstar$dob)
+write_csv(medstar, "/Users/bradcannell/Desktop/medstar.csv")
+```
+

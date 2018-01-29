@@ -1,0 +1,140 @@
+---
+title: "Table 1"
+output:
+  word_document:
+    reference_docx: word_style_template_01.docx
+  html_notebook:
+    toc: yes
+  html_document:
+    code_folding: show
+    toc: no
+    toc_float: no
+date: '`r Sys.Date()`'
+---
+
+```{r setup, echo = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "")
+```
+
+```{r load_packages, message=FALSE}
+# Load packages
+library(tidyverse)
+library(dataclean)
+library(stringr)
+```
+
+```{r load_data}
+# Load data
+load("/Users/bradcannell/Dropbox/Research/2014-MU-CX-0102 DETECT/Pilot Test/detect_pilot_test/data/detect_p.RData")
+
+load("/Users/bradcannell/Dropbox/Research/2014-MU-CX-0102 DETECT/Pilot Test/detect_pilot_test/data/final_ids.RData")
+```
+
+```{r subset_columns}
+# Keep only vars of interest
+df <- select(detect_p, id:age, time_diff:any_valid_f)
+about_data(df)
+# 60 observations and 12 variables in the data
+```
+
+```{r subset_rows}
+# Keep only the ids that were used to 
+df$id <- as.character(df$id)
+final_ids <- as_tibble(final_ids) %>% rename(id = value)
+df <- semi_join(df, final_ids, by = "id")
+about_data(df)
+rm(final_ids)
+# 39 observations and 12 variables in the data 
+```
+
+-------------------------------------------------------------------------------
+
+&nbsp;
+
+
+
+
+
+
+
+
+
+Creating Table 1 for pilot test manuscript. See the tables_for_word example file.
+
+```{r}
+# Aggregate selected variables
+df2 <- df %>% 
+  group_by(response_group) %>%
+  summarise(
+    n             = n(),
+    age           = mean(age),
+    time          = mean(time_diff),
+    n_allegations = n_distinct(allegation)
+  )
+
+# Group by response_group instead of id
+# There 27 investitgations, but only 26 ids because person 402 is in the data twice. However, they were screened using DETECT on two separate occations.
+```
+
+```{r continuous_function}
+continuous <- function(x) {
+  var_nam <- deparse(substitute(x))
+  pattern <- "(.*)\\$(.*)"
+  var_nam <- stringr::str_replace(string = var_nam, pattern = pattern, replacement = "\\2") 
+  
+  n       <- length(x)
+  out     <- paste0(
+    round(mean(x), 1), 
+    " (", 
+    round(sd(x) / sqrt(n), 2), 
+    ")")
+  t       <- tibble(Characteristic = var_nam, Level = NA, Statistic = out)
+  return(t)
+}
+```
+
+```{r continuous}
+table1 <- bind_rows(
+  continuous(df2$age),
+  continuous(df2$time),
+  continuous(df2$n_allegations)
+)
+```
+
+```{r categorical_function}
+categorical <- function(x) {
+  var_nam <- deparse(substitute(x))
+  pattern <- "(.*)\\$(.*)"
+  var_nam <- stringr::str_replace(string = var_nam, pattern = pattern, replacement = "\\2")
+  
+  temp                <- as.data.frame(prop.table(table(x)) * 100)
+  names(temp)         <- c("Level", "Statistic")
+  temp$Statistic      <- round(temp$Statistic, 1)
+  temp$Characteristic <- var_nam
+  temp                <- temp[, c(3, 1, 2)]
+  temp                <- temp[order(temp$Statistic, decreasing = TRUE), ]
+  temp$Statistic      <- as.character(temp$Statistic) # So that it will bind later
+  return(temp)
+}
+```
+
+```{r categorical}
+table1 <- dplyr::bind_rows(
+  table1,
+  categorical(df$allegation),
+  categorical(df$perp),
+  categorical(df$disposition),
+  categorical(df$closure_reason)
+)
+```
+
+
+```{r}
+knitr::kable(table1, caption = "Table 1. Characteristics of Adult Protective Services investigations that were matched to DETECT screening tool uses for validation, Tarrant County, TX, 2015.")
+```
+
+
+#### Session Info:
+```{r session_info, echo=FALSE}
+sessionInfo()
+```

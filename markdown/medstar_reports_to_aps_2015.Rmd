@@ -1,0 +1,290 @@
+---
+title: "MedStar Reports to APS 2015"
+output:
+  html_notebook:
+    toc: yes
+  html_document:
+    code_folding: hide
+    css: custom-css.css
+    toc: yes
+    toc_float: yes
+  word_document:
+    toc: yes
+date: '`r Sys.Date()`'
+---
+
+-------------------------------------------------------------------------------
+
+# Introduction:
+
+Figure 1, below, illustrates MedStar’s current standard operating procedure for reporting suspected elder abuse and neglect. In the first step, the EMT responds to a 911 call. He or she must use their experience and subjective judgement alone to determine if they believe elder abuse or neglect may be occurring. If they suspect elder abuse is occurring, they are required by [Texas law](https://www.txabusehotline.org/Login/Default.aspx), and MedStar’s standard operating procedure, to report the suspected abuse to [Texas’ statewide intake](https://www.dfps.state.tx.us/Contact_Us/report_abuse.asp). They can make this report over the phone, or using an online web form. Finally, if the EMT reports suspected elder abuse or neglect to APS, the procedure is for them to let the MedStar compliance department know that the report was made. Of course, at each of these steps there is the potential for a breakdown in the process.
+
+For more information about the barriers to reporting that EMTs experience, please view [these articles](https://github.com/mbcann01/detect_pilot_test/wiki/Publications).
+
+During the pilot study, all MedStar EMTs were given access to the pilot version of the DETECT screening tool through their Electronic Patient Care Reporting system (EPCR). In this analysis, we investigate all reports to APS in 2015 that were reported to the MedStar compliance department. We are primarily interested evaluating whether or not reports increased during the period of time that the pilot test occurred.
+
+-----
+
+**Figure 1.** Current EMT reporting procedure.   
+
+![](/Users/bradcannell/Dropbox/Research/2014-MU-CX-0102 DETECT/Pilot Test/detect_pilot_test/images/old_report_sop.png)
+
+-----
+
+# Load packages and functions
+
+```{r load_packages, message=FALSE}
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(dataclean)
+```
+
+# Import data   
+
+```{r import_data}
+col_info <- c( 
+# "col_name",     "col_type"
+  "agency",       "text",
+  "confim_num",   "text",
+  "created",      "date",
+  "reported",     "date",
+  "electronic",   "text",
+  "phone",        "text",
+  "response_num", "text")
+
+# Import data
+medstar_aps <- read_excel(
+  path = "/Users/bradcannell/Desktop/APS Report Data_UNTHSC_IRB.xlsx",
+  sheet = "owssvr",
+  col_names = col_info[seq(1, length(col_info), 2)],
+  col_types = col_info[seq(2, length(col_info), 2)],
+  skip = 1)
+
+about_data(medstar_aps) # 137 observations and 7 variables in the data
+```
+
+# Data preprocessing
+
+```{r}
+# Remove all the CPS cases
+medstar_aps <- filter(medstar_aps, agency == "APS")
+about_data(medstar_aps) # 93 observations and 7 variables in the data 
+```
+
+```{r}
+# Remove 2016 cases
+medstar_aps <- filter(medstar_aps, reported <= as.POSIXct("2016-01-01"))
+about_data(medstar_aps) # 49 observations and 7 variables in the data
+```
+
+```{r}
+# Calculate time difference between reported (to APS) and created (recorded in MedStar compliance)
+medstar_aps <- medstar_aps %>%
+  mutate(
+    report_interval = interval(reported, created),
+    interval_days = report_interval / ddays())
+```
+
+Mean number of days between the report to APS and a record of that report appearing in the MedStar compliance data:
+
+```{r mean_max}
+# Mean and max number of days
+(mn_days <- round(mean(medstar_aps$interval_days), 1)) # 3.5
+```
+
+Max number of days between the report to APS and a record of that report appearing in the MedStar compliance data:
+
+```{r}
+(mx_days <- round(max(medstar_aps$interval_days))) # 22
+```
+
+```{r dates}
+# Select the reported date
+reports <- select(medstar_aps, reported)
+
+# Number of cases during DETECT
+start <- as.POSIXct("2015-09-17")
+end <- as.POSIXct("2015-10-27")
+n <- filter(reports, reported >= start & reported <= end) %>% 
+  count() %>% 
+  as.integer()
+
+# Group by day and count number of reports
+reports_date <- reports %>%
+  group_by(reported) %>%
+  count() %>%
+  rename(count_date = n)
+
+# Group by month and count number of reports
+reports_month <- reports %>% 
+  mutate(month = format(reported, "%m")) %>%
+  group_by(month) %>%
+  count() %>% 
+  rename(count_month = n) %>%
+  
+  # Add January
+  add_row(month = "01", count_month = 0) %>%
+  arrange(month) %>%
+  
+  # Add month names
+  mutate(month = ordered(month,
+    labels = c("January", "February", "March", "April", "May", "June", 
+      "July", "August", "September", "October", "November", "December"))) %>%
+  
+  # Add POSIXct variable corresponding to the middle of each month for merging
+  # with the daily data
+  mutate(
+    reported = as.POSIXct(c("2015-01-15", "2015-02-15", "2015-03-15", 
+      "2015-04-15", "2015-05-15", "2015-06-15", "2015-07-15", "2015-08-15", 
+      "2015-09-15", "2015-10-15", "2015-11-15", "2015-12-15")),
+    tag = 1)
+
+# Merge reports_date and reports_month
+reports_merge <- merge(reports_date, reports_month, by = "reported", all = TRUE)
+```
+
+```{r}
+# Min and Max number of reports in a month
+min_reports <- min(reports_merge$count_month, na.rm = TRUE)
+# 0
+low_month <- reports_merge[which(reports_merge$count_month == min_reports), "month"]
+# January
+max_reports <- max(reports_merge$count_month, na.rm = TRUE)
+# 13
+high_month <- reports_merge[which(reports_merge$count_month == max_reports), "month"]
+# October
+
+# Calculate distribution of reporting mode (phone / electronic / both)
+preport <- sum(medstar_aps$phone == "Yes" & medstar_aps$electronic == "No")
+# 33
+ereport <- sum(medstar_aps$phone == "No" & medstar_aps$electronic == "Yes")
+# 12
+breport <- sum(medstar_aps$phone == "Yes" & medstar_aps$electronic == "Yes")
+# 4
+```
+
+# DETECT pilot response id's
+
+These are the response id numbers that correspond to 911 responses where a report was made to APS during the DETECT pilot phase, and MedStar compliance was made aware of the report.
+
+```{r response_id}
+response_ids <- filter(medstar_aps, reported >= start & reported <= end) %>% 
+  select(response_num)
+
+# Save
+# save(response_ids, file = "/Users/bradcannell/Desktop/response_ids.RData")
+
+load("/Users/bradcannell/Desktop/response_ids.RData")
+```
+
+There were 16 response id's with a report date between 2015-09-17 and 2015-10-27 in the data from MedStar compliance.
+
+-----
+
+# Results
+
+In 2015, there were `r sum(reports_month$count_month)` total reports to APS that MedStar's compliance office was made aware of (Table 1). On average, Medstar compliance was made aware of reports `r mn_days` days after they occurred; however, in some cases MedStar compliance was not informed of the report for `r mx_days` days.
+
+The DETECT screening tool was used in MedStar's EPCR from 2015-09-17 to 2015-10-27. **During that time `r n` reports were made to APS.** `r low_month` had the lowest number of reports (`r min_reports`), and `r high_month` had the highest number of reports (`r max_reports`). Of the `r sum(reports_month$count_month)` total reports, `r preport` were made by phone only, `r ereport` were made electronically only, and `r breport` were made by phone and electronically.
+
+-----
+
+# Table 1. MedStar reports to APS by month
+
+```{r table_1}
+knitr::kable(reports_month[c("month", "count_month")],
+  col.names = c("Month", "Number of Reports"),
+  align = c("l", "c"))
+```
+
+-----
+
+# Figure 2. MedStar reports to APS by month
+
+```{r figure2, warning=FALSE}
+# Grab rows with values for count_month - need for geom_line
+rows <- which(!is.na(reports_merge["count_month"]))
+
+# Create breaks at each month for the x axis
+mnth_breaks <- reports_merge$reported[rows]
+
+ggplot(reports_merge) +
+  geom_rug(aes(x = reported), col = "blue") +
+  geom_point(aes(x = reported, y = count_month)) +
+  geom_line(aes(x = reported, y = count_month), data = reports_merge[rows,]) +
+  geom_vline(
+    xintercept = as.numeric(as.POSIXct("2015-09-17")),
+    col = "red", alpha = 0.5, linetype = 2
+  ) +
+  geom_vline(
+    xintercept = as.numeric(as.POSIXct("2015-10-27")),
+    col = "red", alpha = 0.5, linetype = 2
+  ) +
+  scale_y_continuous("Number of Reports to APS") +
+  scale_x_datetime("Month", breaks = mnth_breaks, labels = format(mnth_breaks, "%b")) +
+  theme_bw() +
+  theme(
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 12)
+  )
+
+# Size for export: 1778*1000
+
+# This will come back with the following warnings:
+# Removed 43 rows containing missing values (geom_point).  
+# This can be safely ignored. This is just because of all the days with NA for
+# count_month, which are supposed to be NA.
+```
+
+1. The red dashed lines indicate the time period in which the DETECT screening tool was used in MedStar's EPCR.
+2. The blue rug plot shows the marginal distribution of individual reports to APS. 
+
+```{r figure2_export, warning=FALSE, include=FALSE}
+# This is the same figure as above. Some of the dimensions are changed so that it looks better when exported for inclusion in a document or slide show.
+
+# Size for export: 1778*1000
+
+# Grab rows with values for count_month - need for geom_line
+rows <- which(!is.na(reports_merge["count_month"]))
+
+# Create breaks at each month for the x axis
+mnth_breaks <- reports_merge$reported[rows]
+
+ggplot(reports_merge) +
+  geom_rug(aes(x = reported), col = "blue", size = 1.5) +
+  geom_point(aes(x = reported, y = count_month), size = 2.5) +
+  geom_line(aes(x = reported, y = count_month), data = reports_merge[rows,], size = 1.5) +
+  geom_vline(
+    xintercept = as.numeric(as.POSIXct("2015-09-17")),
+    col = "red", alpha = 0.5, linetype = 2, size = 1.5
+  ) +
+  geom_vline(
+    xintercept = as.numeric(as.POSIXct("2015-10-27")),
+    col = "red", alpha = 0.5, linetype = 2, size = 1.5
+  ) +
+  scale_y_continuous("Number of Reports to APS") +
+  scale_x_datetime("Month", breaks = mnth_breaks, labels = format(mnth_breaks, "%b")) +
+  theme_bw() +
+  theme(
+    axis.title = element_text(size = 24),
+    axis.text = element_text(size = 20)
+  )
+# This will come back with the following warnings:
+# Removed 43 rows containing missing values (geom_point).  
+# This can be safely ignored. This is just because of all the days with NA for
+# count_month, which are supposed to be NA.
+```
+
+-----
+
+# Limitations
+
+The primary limitation here is that we are unable to determine if reports to APS increased generally, or if reports to APS remained constant, and only the proportion of reports that compliance was made aware of increased.
+
+-----
+
+#### Session Info:
+```{r session_info, echo=FALSE}
+sessionInfo()
+```

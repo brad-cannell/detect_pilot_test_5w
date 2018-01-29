@@ -1,0 +1,360 @@
+---
+title: "Table X. Response patterns for each of the 26 DETECT screening items"
+output:
+  word_document:
+    reference_docx: word_style_template_01.docx
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_packages, message=FALSE, echo=FALSE, warning=FALSE}
+# Load packages
+library(tidyverse)
+library(feather)
+
+source("../../R/label_qtext.R")
+```
+
+<!-- Load data -->
+
+<!-- medstar_detect_demo.feather was created in data_clean_medstar.Rmd     -->
+<!-- medstar_detect.feather was created in data_clean_medstar.Rmd    -->
+<!-- merged_screening_recode.RData was created in preprocess_for_analysis.Rmd    -->
+
+```{r echo=FALSE}
+medstar_dd <- read_feather("/Users/bradcannell/Desktop/medstar_detect_demo.feather")
+medstar_d  <- read_feather("/Users/bradcannell/Desktop/medstar_detect.feather")
+merged_sr  <- read_rds("/Users/bradcannell/Desktop/merged_screening_recode.RData")
+```
+
+<!-- Data management -->
+
+<!-- What are the id numbers for screenings that were associated with a report (by someone) to APS (N=46)? -->
+
+```{r echo=FALSE}
+screenings_reported <- merged_sr %>% 
+  group_by(response_num, first_name) %>% 
+  mutate(count = row_number()) %>% 
+  filter(count == 1) %>% 
+  select(response_num, first_name) %>% 
+  mutate(reported = 1) # Add a tag that indicates this row was reported after merging with other data.
+```
+
+<!-- For each screening item, I want to know how often it was skipped, how often it was yes, how often it was no, how often it was don't know, if yes, how often it was reported, and if yes, how often other items were also yes. -->
+
+```{r echo=FALSE}
+response_counts <- medstar_d %>% 
+  select(unusual_odor36:adls61) %>% 
+  mutate_all(
+    funs(
+      skipped = if_else(!is.na(.), 0L, 1L),             # 1 if any answer - even "Don't Know", 0 if NA
+      yes = case_when(. == "Yes" ~ 1L, TRUE ~ 0L),      # 1 if Yes, 0 if anything else - including NA
+      no = case_when(. == "No" ~ 1L, TRUE ~ 0L),        # 1 if No, 0 if anything else - including NA
+      dk = case_when(. == "Don’t Know" ~ 1L, TRUE ~ 0L) # 1 if Don't Know, 0 if anything else - including NA
+    )
+  )
+```
+
+<!-- Merge response counts back with response number, date, and first name -->
+
+```{r echo=FALSE}
+id_date_name <- medstar_d %>% select(response_num, response_date, first_name)
+
+response_counts <- bind_cols(id_date_name, response_counts)
+```
+
+<!-- Merge response data with indicator variable for being reported to APS -->
+
+```{r echo=FALSE, warning=FALSE}
+response_counts <- response_counts %>% 
+  left_join(screenings_reported, by = c("response_num", "first_name")) %>% 
+  mutate(reported = if_else(is.na(reported), 0, reported))
+```
+
+<!-- Make sure there are still 46 reports to APS -->
+
+```{r include=FALSE}
+# response_counts %>%
+#   group_by(response_num, first_name) %>%
+#   mutate(count = row_number()) %>%
+#   filter(count == 1) %>%
+#   ungroup() %>%
+#   summarise(Reports = sum(reported, na.rm = TRUE)) # 46
+```
+
+
+
+
+
+
+
+
+
+<!-- Create table shell -->
+
+```{r echo=FALSE}
+table <- tibble(
+  Item             = vector(mode = "character"),
+  Skipped          = vector(mode = "character"),
+  Yes              = vector(mode = "character"),
+  No               = vector(mode = "character"),
+  `Don't Know`     = vector(mode = "character"),
+  `Yes - Reported` = vector(mode = "character"),
+  `Yes - Only Yes` = vector(mode = "character")
+)
+```
+
+<!-- Add stat identifier to table -->
+
+```{r echo=FALSE}
+table[1, ] <- c("", rep("N (%)", 6))
+```
+
+<!-- Create function to return N and percent for each response option by screening item -->
+
+```{r include=FALSE}
+# For data checking - if needed
+# Hitting the play button won't work because of include=FALSE
+# response_counts %>%
+#   summarise(
+#     skipped = sum(unusual_odor36_skipped),
+#     skipped_percent = (mean(unusual_odor36_skipped) * 100) %>% round(1) %>% format(nsmall = 1L),
+#     skipped_out = paste0(skipped, " (", skipped_percent, ")"),
+#     yes = sum(unusual_odor36_yes),
+#     yes_percent = (mean(unusual_odor36_yes) * 100) %>% round(1) %>% format(nsmall = 1L),
+#     yes_out = paste0(yes, " (", yes_percent, ")"),
+#     no = sum(unusual_odor36_no),
+#     no_percent = (mean(unusual_odor36_no) * 100) %>% round(1) %>% format(nsmall = 1L),
+#     no_out = paste0(no, " (", no_percent, ")"),
+#     dk = sum(unusual_odor36_dk),
+#     dk_percent = (mean(unusual_odor36_dk) * 100) %>% round(1) %>% format(nsmall = 1L),
+#     dk_out = paste0(dk, " (", dk_percent, ")")
+#   )
+```
+
+```{r echo=FALSE}
+count_responses <- function(df, column) {
+  
+  # append yes, no, etc to end of var name and convert to quoture
+  item    <- enquo(column)
+  skipped <- paste(quo_name(item), "skipped", sep = "_") %>% rlang::sym()
+  yes     <- paste(quo_name(item), "yes", sep = "_") %>% rlang::sym()
+  no      <- paste(quo_name(item), "no", sep = "_") %>% rlang::sym()
+  dk      <- paste(quo_name(item), "dk", sep = "_") %>% rlang::sym()
+  
+  df %>%
+    summarise(
+      
+      skipped = sum(!!skipped),
+      skipped_percent = (mean(!!skipped) * 100) %>% round(1) %>% format(nsmall = 1L),
+      Skipped = paste0(skipped, " (", skipped_percent, ")"),
+      
+      yes = sum(!!yes),
+      yes_percent = (mean(!!yes) * 100) %>% round(1) %>% format(nsmall = 1L),
+      Yes = paste0(yes, " (", yes_percent, ")"),
+      
+      no = sum(!!no),
+      no_percent = (mean(!!no) * 100) %>% round(1) %>% format(nsmall = 1L),
+      No = paste0(no, " (", no_percent, ")"),
+      
+      dk = sum(!!dk),
+      dk_percent = (mean(!!dk) * 100) %>% round(1) %>% format(nsmall = 1L),
+      `Don't Know` = paste0(dk, " (", dk_percent, ")")
+      
+    ) %>% 
+    mutate(Item = !!quo_name(item)) %>% 
+    select(Item, Skipped, Yes, No, `Don't Know`)
+
+}
+# count_responses(response_counts, unusual_odor36)
+```
+
+<!-- Loop over all screening items -->
+
+```{r echo=FALSE}
+all_items <- medstar_d %>%                                        # Select all screening items
+  select(unusual_odor36:adls61) %>% 
+  names()
+
+row <- 2                                                          # Row index to start with
+columns <- 1:5                                                    # Columns to fill in
+
+for(i in seq_along(all_items)) {                                  # Loop over each screening item
+  item <- rlang::sym(all_items[[i]])                              # To "unquote" the column names
+  table[row, columns] <- count_responses(response_counts, !!item) # Fill in table
+  row <- row + 1                                                  # Increment row
+}
+```
+
+
+
+
+<!-- Create function to return N and percent if yes, reported -->
+
+```{r include=FALSE}
+# For data checking - if needed
+# Hitting the play button won't work because of include=FALSE
+# response_counts %>% 
+#   filter(unusual_odor36_yes == 1) %>% 
+#   summarise(
+#     reported = sum(reported),
+#     yes = nrow(.),
+#     percent = ((reported / yes) * 100) %>% round(1) %>% format(nsmall = 1L),
+#     `Yes - Reported` = paste0(reported, " (", percent, ")")
+#   )
+```
+
+```{r echo=FALSE}
+count_if_yes_reported <- function(df, column) {
+  
+  # append yes to end of var name and convert to quoture
+  item    <- enquo(column)
+  yes <- paste(quo_name(item), "yes", sep = "_") %>% rlang::sym()
+  
+  
+  response_counts %>% 
+    filter(rlang::UQ(yes) == 1) %>% 
+    summarise(
+      reported = sum(reported),
+      yes = nrow(.),
+      percent = ((reported / yes) * 100) %>% round(1) %>% format(nsmall = 1L),
+      `Yes - Reported` = paste0(reported, " (", percent, ")")
+    )%>% 
+    mutate(Item = !!quo_name(item)) %>% 
+    select(Item, `Yes - Reported`)
+  
+}
+# count_if_yes_reported(response_counts, unusual_odor36)
+```
+
+<!-- Loop over all screening items -->
+
+```{r echo=FALSE}
+all_items <- medstar_d %>%                                                 # Select all screening items
+  select(unusual_odor36:adls61) %>% 
+  names()
+
+row <- 2                                                                   # Row index to start with
+columns <- 6                                                               # Columns to fill in
+
+for(i in seq_along(all_items)) {                                           # Loop over each screening item
+  item <- rlang::sym(all_items[[i]])                                       # To "unquote" the column names
+  table[row, columns] <- count_if_yes_reported(response_counts, !!item)[2] # Fill in table
+  row <- row + 1                                                           # Increment row
+}
+```
+
+
+
+
+<!-- Create function to return N and percent if yes, other yes -->
+
+```{r include=FALSE}
+# For data checking - if needed
+# Hitting the play button won't work because of include=FALSE
+# response_counts %>%
+#   select(ends_with("yes")) %>%
+#   mutate(sum_yes = rowSums(.)) %>%
+#   filter(unusual_odor36_yes == 1) %>%
+#   mutate(only_yes = sum_yes == 1) %>%
+#   summarise(
+#     yes = nrow(.),
+#     only_yes = sum(only_yes),
+#     percent = ((only_yes / yes) * 100) %>% round(1) %>% format(nsmall = 1L),
+#     `Yes - Only Yes` = paste0(only_yes, " (", percent, ")")
+#   )
+```
+
+```{r echo=FALSE}
+count_only_yes <- function(df, column) {
+  
+  # append yes to end of var name and convert to quoture
+  item    <- enquo(column)
+  yes <- paste(quo_name(item), "yes", sep = "_") %>% rlang::sym()
+  
+  
+  response_counts %>%
+    select(ends_with("yes")) %>%
+    mutate(sum_yes = rowSums(.)) %>%
+    filter(rlang::UQ(yes) == 1) %>%
+    mutate(only_yes = sum_yes == 1) %>%
+    summarise(
+      yes = nrow(.),
+      only_yes = sum(only_yes),
+      percent = ((only_yes / yes) * 100) %>% round(1) %>% format(nsmall = 1L),
+      `Yes - Only Yes` = paste0(only_yes, " (", percent, ")")
+    ) %>% 
+    mutate(Item = !!quo_name(item)) %>%
+    select(Item, `Yes - Only Yes`)
+  
+}
+# count_only_yes(response_counts, unusual_odor36)
+```
+
+<!-- Loop over all screening items -->
+
+```{r echo=FALSE}
+all_items <- medstar_d %>%                                          # Select all screening items
+  select(unusual_odor36:adls61) %>% 
+  names()
+
+row <- 2                                                            # Row index to start with
+columns <- 7                                                        # Columns to fill in
+
+for(i in seq_along(all_items)) {                                    # Loop over each screening item
+  item <- rlang::sym(all_items[[i]])                                # To "unquote" the column names
+  table[row, columns] <- count_only_yes(response_counts, !!item)[2] # Fill in table
+  row <- row + 1                                                    # Increment row
+}
+```
+
+<!-- Add screening item text to "item" column -->\
+
+```{r echo=FALSE}
+table[2:27, 1] <- label_qtext()
+```
+
+<!-- Turn into Kable -->
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+table_response_patterns_kable <- knitr::kable(table)
+write_rds(table_response_patterns_kable, path = "table_response_patterns_kable.rds") # Save
+table_response_patterns_kable
+```
+
+```{r notes, include=FALSE}
+# After knitting word table:
+# Reorient to landscape
+# Change all font to TNR 11
+# Add Table X.
+# Remove bold from title - except "Table 1"
+# Center rows 1 & 2
+# Adjust column widths as needed
+# Add bottom border to table
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

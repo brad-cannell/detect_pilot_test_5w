@@ -1,0 +1,622 @@
+---
+title: "Analysis of Screening Items"
+date: "Created: 2016-10-14 <br> Updated: `r Sys.Date()`"
+output: github_document
+---
+
+-------------------------------------------------------------------------------
+
+```{r load_packages, message=FALSE}
+# Load packages and functions
+library(tidyverse)
+library(forcats)
+library(gmodels)
+library(caret)
+
+# devtools::install_github("brad-cannell/myFunctions")
+library(myFunctions)
+```
+
+merged_screening_recode.RData was created in preprocess_for_analysis.Rmd
+
+```{r load_data}
+# Load data
+merged_sr <- read_rds("/Users/bradcannell/Desktop/merged_screening_recode.RData")
+about_data(merged_sr) # 67 observations and 138 variables in the data 
+```
+
+#### Create Summary Data for Plotting
+
+Click the `code` button to the right to view the R code used in this step of the analysis.
+
+```{r create_summary_data}
+# Create summary data (long) for plotting
+qsummary <- merged_sr %>%
+  select(unusual_odor36:adls61) %>%                  # Keep only the survey items
+  map(table) %>%                                     # Count for each answer choice
+  as_tibble() %>%                                    # Coerce back to tibble
+  mutate(answer = factor(c(1, 2, 3),                 # Create answer variable
+    levels = c(1, 2, 3), 
+    labels = c("Don't Know", "No", "Yes"))) %>%      
+  gather(key = question, value = count, -answer) %>% # Reshape to long format
+  mutate(count = unclass(count)) %>%                 # Remove class "table"
+  group_by(question) %>%                             # Group by question
+  mutate(                                            # Total count for each question
+    qtotal = sum(count),                                    
+    percent = count / qtotal * 100) %>%              # Percent for each answer choice
+  select(question, answer, count, qtotal, percent)   # Change column order
+```
+
+-------------------------------------------------------------------------------
+
+## Figure 6. Count of responses by DETECT screening item.
+
+```{r graph_count, fig.width=7, fig.height=8}
+# Sort by count
+counts <- ungroup(qsummary) %>%                      # Remove "group_by"
+  arrange(qtotal) %>%                                # Sort by qtotal
+  mutate(question = factor(question,                 # Set question to factor (to 
+    levels = unique(question)))                      # maintain sorted order in graph)
+
+# Plot
+ggplot(counts, aes(x = question, y = count, fill = answer)) + 
+ geom_bar(stat = "identity", position = "stack") + 
+ scale_x_discrete("Screening Question") +
+ scale_y_continuous("Number of Responses") +
+ scale_fill_manual("Answer Choice",
+   # Listed in factor order (0, 1, 9)
+   values = c("#377EB8", "#E41A1C", "#7CCD7C")
+ ) +
+ coord_flip()
+
+rm(counts)
+```
+
+Note: Complete text of each screening item is shown in the [codebook](https://rawgit.com/mbcann01/detect_pilot_test/master/vignettes/detect_pilot_data_codebook.html).   
+
+-------------------------------------------------------------------------------
+
+&nbsp;
+
+## Figure 7. Proportion of Responses by DETECT screening item.
+
+```{r count_props, fig.width=7, fig.height=8}
+# Sort questions in reverse order
+percentages <- ungroup(qsummary) %>%                 # Remove "group_by"
+  arrange(desc(question)) %>%                        # Sort by question
+  mutate(question = factor(question,                 # Set question to factor (to 
+    levels = unique(question)))                      # maintain sorted order in graph)
+
+# Plot
+ggplot(percentages, aes(x = question, y = percent, fill = answer)) + 
+ geom_bar(stat = "identity", position = "fill") + 
+ scale_x_discrete("Screening Question") +
+ scale_y_continuous("Proportion of Responses") +
+ scale_fill_manual("Answer Choice",
+   # Listed in factor order (0, 1, 9)
+   values = c("#377EB8", "#E41A1C", "#7CCD7C")
+ ) +
+ coord_flip() +
+ ggtitle("Figure 2. Proportion of Responses by Question")
+
+rm(percentages, qsummary)
+```
+
+Note: Complete text of each screening item is shown in the [codebook](https://rawgit.com/mbcann01/detect_pilot_test/master/vignettes/detect_pilot_data_codebook.html).   
+
+-------------------------------------------------------------------------------
+
+&nbsp;
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Finalize DETECT items
+
+-------------------------------------------------------------------------------
+
+**Define success for this screening tool:**
+
+The screening tool is successful if more reports are made to APS than would have been made without the existence of the tool, and there is not a greater proportion of false discoveries generated among users of the DETECT screening tool than among the general public.
+
+Further, in this particular application, it's important that the processes for screening is transparent and intuitive for MedStar, APS, and the community.
+
+In [region 3 in 2015]("https://www.dfps.state.tx.us/About_DFPS/Annual_Reports_and_Data_Books/2015/pdf/Databook2015.pdf") there were 9,242 validated investigations, 4,643 invalidated investigations, 2,089 investigations that resulted in a disposition of unable to determine, and 442 investigations that resulted in a disposition of other (APS Data Book, 2016, p.14).
+
+![](/Users/bradcannell/Dropbox/Research/DETECT 2014-MU-CX-0102/Phase 1Pilot Test/detect_pilot_test/images/all_regions_large.jpg)
+
+In our analysis, we only consider investigations that result in a valid or invalid disposition. The tool was not designed for, nor do we currently have the statistical power to, validate the tool's ability to predict other outcomes (e.g., death, moving before the investigation is complete, inability of APS to make contact). Therefore, to simplify matters, we may only use region 3 valid and invalid dispositions for our benchmark false discovery rate to meet or exceed. Given this condition, the overall percentage of invalid reports (false discoveries) in region 3 in 2015 was 4643 / (9242 + 4643), or 33%. If we want to be conservative and consider the percentage of all reports that were invalid, it is 4643 / (9242 + 4643 + 2089 + 442), or 28%. 
+
+Therefore, we want to find a combinations of questions that appear to have favorable predictive performance, yet has a false discovery rate no greater than 0.28 (the conservative baseline proportion in the population).
+
+## Futher data processing
+
+1. Keep 1 row per APS investigation.   
+2. Drop rows with unknown disposition.
+3. Keep outcome variable (any_valid_f) and Keep screening items with "Don't Know" recoded to NA.   
+4. Remove near-zero variance predictors.   
+5. Reorder levels of outcome variable any\_valid\_f so that "yes" is the modeled outcome. 
+
+### Load the merged data again
+
+```{r}
+# Load data
+merged_sr <- read_rds("/Users/bradcannell/Desktop/merged_screening_recode.RData")
+
+# Select variables of interest
+# Using screening items with "Don't Know" recoded to NA
+screenings <- merged_sr %>% 
+  select(obs, aps_report_num, group:last_name, allegation, perp, disposition, unusual_odor36_na:adls61_na, age, time_diff)
+
+about_data(screenings) # 67 observations and 36 variables 
+```
+
+How many unique investigations
+
+```{r}
+unique(screenings$group) %>% length() # 46 unique investigations
+```
+
+The 46 above goes in the tier 2 box on the DETECT Pilot Screening-Investigation Merge Flow Chart.
+
+## Reduce data to 1 row per APS investigation
+
+Currently, each row is an allegation. And, there can be multiple allegations per APS investigation. For each screening item we have the choice of using disposition (APS disposition for that particular allegation - may have multiple different dispositions per investigation) or any_valid (the disposition for any allegation in an investigation was valid - even if others were invalid - value is constant over all rows of an investigation). It is inappropriate to use single rows as the prediction and any_valid as the "truth" in the confusion matrix. Doing so essentially just more heavily weights investigations that had a greater number of allegations. Therefore, the confusion matrix either needs to be one row per investigation, or use disposition as the "truth" for each allegation. 
+
+We will use one row per investigation. We aren't yet trying to predict specific types of abuse, just if a positive screen during predicts _any_ abuse or neglect is occurring.
+
+### Keep rows with disposition of valid or invalid only 
+
+If an investigation only has one row, and the disposition for that row was "unable to determine" or "other", then that disposition will be dropped entirely from the analysis.
+
+Update 2018-01-03: No longer doing this. I want to present descriptive statistics for all rows. We are getting away from emphasizing the FDR.
+
+```{r}
+# Data check
+# check_no_valid_invalid <- screenings %>% 
+#   group_by(group) %>% 
+#   mutate(
+#     any_valid_invalid = if_else(any(disposition == "Valid") | any(disposition == "Invalid"), 1, 0),
+#     any_other = if_else(any(disposition == "Unable to Determine") | any(disposition == "Other"), 1, 0)
+#   ) %>% 
+#   select(obs, group, allegation, disposition, any_valid_invalid, any_other) %>% 
+#   ungroup() %>% 
+#   filter(any_valid_invalid == 0 & any_other == 1)
+# 
+# unique(check_no_valid_invalid$group) %>% length() # 12 investigations that only have other or unable to determine
+# 
+# rm(check_no_valid_invalid)
+```
+
+```{r}
+# screenings <- filter(screenings, disposition %in% c("Valid", "Invalid"))
+# about_data(screenings) # 45 observations (22 dropped) and 36 variables in the data 
+```
+
+How many unique investigations remain
+
+```{r}
+unique(screenings$group) %>% length() # 34 unique investigations (12 dropped)
+```
+
+Every remaining investigation should conclude with a disposition of valid or invalid only.
+
+The 34 above goes in the tier 3 box on the DETECT Pilot Screening-Investigation Merge Flow Chart.
+
+Update 2018-01-03. The two statements above are no longer true.
+
+### Create any_valid
+
+```{r}
+screenings <- screenings %>% 
+  group_by(group) %>% 
+  mutate(any_valid   = if_else(any(disposition == "Valid"), 1, 0)) %>% 
+  ungroup() %>% 
+  mutate(any_valid_f = factor(any_valid, labels = c("No", "Yes"))) %>% 
+  select(obs:disposition, any_valid, any_valid_f, everything())
+```
+
+```{r}
+about_data(screenings) # 45 observations and 38 variables
+```
+
+How many unique investigations remain
+
+```{r}
+unique(screenings$group) %>% length() # 34 unique investigations
+```
+
+At this point, within group (investigation), there is no difference in the values of any_valid (outcomes of interest). 
+
+There is also no differences (within investigations) in DETECT responses (exposure of interest). 
+
+Just keep one observation per investigation.
+
+```{r}
+screenings <- screenings %>%
+  group_by(group) %>% 
+  mutate(obs = row_number()) %>% 
+  filter(obs == 1) %>% 
+  ungroup()
+```
+
+Make sure that if I do filter(obs == 1) that I keep all 34 people in the data.
+
+```{r}
+about_data(screenings)  # 34 observations and 38 variables
+```
+
+```{r}
+unique(screenings$group) %>% length() # 34 unique investigations
+```
+
+
+
+
+
+
+
+
+
+### Remove near zero variance predictors
+
+```{r}
+nzv <- screenings %>% 
+  select(unusual_odor36_na:adls61_na) %>% 
+  nearZeroVar(saveMetrics = TRUE, names = TRUE)
+cat("Done")
+```
+
+```{r }
+nzv <- nzv %>% 
+    mutate(vars = rownames(.)) %>% 
+    filter(nzv == TRUE) %>% 
+    select(vars) %>% 
+    unlist() %>% 
+    unname()
+
+# Put in function to improve readability of nb.html file
+the_names <- function() {
+  cat("The names for the near zero variance variables are: \n \n")
+  print(nzv)
+  cat("\nThese variables are dropped in the chunk below: \n")
+}
+the_names()
+```
+
+2017-09-25: There are 9 NZV predictors:
+
+1. "alc_containers40_na"   
+2. "cg_deceptive46_na"      
+3. "cg_bad_info47_na"     
+4. "cg_alcdrugs48_na"         
+5. "cg_dependent49_na"          
+6. "no_talk51_na"     
+7. "suspicious_injuries53_na"   
+8. "old_injuries54_na"    
+9. "alcdrugs55_na"  
+
+Drop NZV predictors
+
+```{r}
+screenings <- screenings %>% 
+  select(-one_of(nzv))
+about_data(screenings) # 34 observations and 29 variables in the data (Expected)
+```
+
+## How many people from the compliance data remain
+
+```{r}
+screenings %>% filter(!is.na(aps_report_num)) %>% nrow() # 6
+```
+
+At this point, there are 34 investigations in the analysis. Each row is a unique investigation. 
+Only 6 of those rows were definitely reported to APS by MedStar (i.e., match compliance data).   
+Additionally, there are 17 screening items remaining in the analysis (26 - 9 = 17).   
+
+### Relevel any_valid_f so that "yes" is the first level 
+
+This improves interpretability of some of the output below.
+
+```{r}
+screenings$any_valid_f <- forcats::fct_relevel(screenings$any_valid_f, "Yes")
+cat("Done")
+```
+
+```{r}
+# Clean up
+rm(nzv, the_names)
+cat("Done")
+```
+
+```{r}
+# Put in function to improve readability of nb.html file
+after_clean <- function() {
+ cat("After preprocessing, there are: \n")
+  cat(about_data(screenings))  
+  cat("\n")
+  cat("\n")
+  cat("The remaining variables are: \n")
+  names(screenings) 
+}
+after_clean() # 34 observations and 29 variables in the data
+```
+
+## Average age of those remaining
+
+```{r}
+screenings %>% 
+  select(age) %>% 
+  summarise(
+    N = n(),
+    Mean = mean(age),
+    SD = sd(age),
+    Min = min(age),
+    Max = max(age)
+  )
+```
+
+## Average time between DETECT screening and APS investigation initiation
+
+```{r}
+screenings %>% 
+  select(time_diff) %>% 
+  summarise(
+    N = n(),
+    Mean = mean(time_diff),
+    SD = sd(time_diff)
+  )
+```
+
+## Average number of allegations investigated
+
+```{r}
+final_group <- screenings %>% 
+  select(group) %>% 
+  unlist
+
+merged_sr %>% 
+  filter(group %in% final_group) %>% 
+  select(group, allegation) %>% 
+  group_by(group) %>% 
+  mutate(a_count = row_number()) %>%  
+  filter(a_count == max(a_count)) %>% 
+  ungroup %>% 
+  summarise(
+    N = n(),
+    Mean = mean(a_count),
+    SD = sd(a_count)
+  )
+```
+
+## Most common allegation investigated
+
+```{r}
+final_group <- screenings %>% 
+  select(group) %>% 
+  unlist
+
+merged_sr %>% 
+  filter(group %in% final_group) %>% 
+  select(group, allegation) %>% 
+  group_by(allegation) %>% 
+  summarise(n = n()) %>% 
+  ungroup() %>% 
+  arrange(desc(n)) %>% 
+  mutate(
+    cumsum = cumsum(n),
+    proportion = n / max(cumsum)
+  )
+```
+
+## Most common perpetrator investigated
+
+```{r}
+final_group <- screenings %>% 
+  select(group) %>% 
+  unlist
+
+merged_sr %>% 
+  filter(group %in% final_group) %>% 
+  select(group, perp) %>% 
+  group_by(perp) %>% 
+  count() %>% 
+  ungroup() %>% 
+  arrange(desc(n)) %>% 
+  mutate(
+    cumsum = cumsum(n),
+    proportion = n / max(cumsum)
+  )
+```
+
+## Percent of valid allegations
+
+```{r}
+final_group <- screenings %>% 
+  select(group) %>% 
+  unlist
+
+merged_sr %>% 
+  filter(group %in% final_group) %>% 
+  select(group, allegation, disposition) %>% 
+  group_by(disposition) %>% 
+  count() %>% 
+  ungroup() %>% 
+  arrange(desc(n)) %>% 
+  mutate(
+    cumsum = cumsum(n),
+    proportion = n / max(cumsum)
+  )
+
+rm(final_group)
+```
+
+Not all valid or invalid. Even though the 34 investigations that remain in the data can be coded as "any valid" or "all invalid" overall, there were still individual allegations that could not be determined.
+
+## Percent of investigations with at least one valid allegation
+
+```{r}
+screenings %>% 
+  select(any_valid_f) %>% 
+  group_by(any_valid_f) %>% 
+  count() %>% 
+  ungroup() %>% 
+  arrange(desc(n)) %>% 
+  mutate(
+    cumsum = cumsum(n),
+    proportion = n / max(cumsum)
+  ) 
+```
+
+## Performance measures for remaining screening items
+
+```{r}
+performance <- function(item, outcome) {
+  
+  # Allocate space for results
+  results <- tibble(
+    Var                  = NA,
+    Total                = NA,
+    "Total with Outcome" = NA,
+    No                   = NA,
+    Yes                  = NA,
+    TP                   = NA,
+    FP                   = NA,
+    FN                   = NA,
+    TN                   = NA,
+    Sensativity          = NA,
+    Specificity          = NA,
+    FPR                  = NA,
+    FNR                  = NA,
+    FDR                  = NA,
+    Accuracy             = NA,
+    Misclassification    = NA
+  )
+  
+  # Perform calculations
+  for (i in seq_along(item)) {
+    results[i, "Var"]                <- names(item)[[i]]
+    results[i, "Total"]              <- sum(!is.na(item[[i]]))
+    results[i, "Total with Outcome"] <- sum(!is.na(item[[i]]) & !is.na(outcome))
+    results[i, "No"]                 <- sum(item[[i]] == "No", na.rm = TRUE)
+    results[i, "Yes"]                <- sum(item[[i]] == "Yes", na.rm = TRUE)
+    TP                               <- sum(item[[i]] == "Yes" & outcome == "Yes", na.rm = TRUE)
+    FP                               <- sum(item[[i]] == "Yes" & outcome == "No", na.rm = TRUE)
+    FN                               <- sum(item[[i]] == "No" & outcome == "Yes", na.rm = TRUE)
+    TN                               <- sum(item[[i]] == "No" & outcome == "No", na.rm = TRUE)
+    results[i, "TP"]                 <- TP
+    results[i, "FP"]                 <- FP
+    results[i, "FN"]                 <- FN
+    results[i, "TN"]                 <- TN
+    results[i, "Sensativity"]        <- round(TP / (TP + FN), 2)
+    results[i, "Specificity"]        <- round(TN / (TN + FP), 2)
+    results[i, "FPR"]                <- round(FP / (TN + FP), 2)
+    results[i, "FNR"]                <- round(FN / (FN + TP), 2)
+    results[i, "FDR"]                <- round(FP / (TP + FP), 2)
+    results[i, "Accuracy"]           <- round((TP + TN) / (TP + FP + TN + FN), 2)
+    results[i, "Misclassification"]  <- round((FP + FN) / (TP + FP + TN + FN), 2)
+  }
+  
+  # Return results
+  results
+}
+```
+
+```{r}
+screenings %>% 
+  select(unusual_odor36_na:adls61_na) %>% 
+  performance(outcome = screenings$any_valid_f) %>% 
+  knitr::kable()
+```
+
+```{r echo=FALSE, eval=FALSE}
+# Reduced table for easier transfer to manuscript
+screenings %>% 
+  select(unusual_odor36_na:adls61_na) %>% 
+  performance(outcome = screenings$any_valid_f) %>% 
+  select(Var, No, Yes, FDR)
+```
+
+## What were the dispositions of the 6 cases from the compliance data?
+
+```{r}
+screenings %>% 
+  filter(!is.na(aps_report_num)) %>% 
+  select(any_valid_f)
+```
+
+All 6 were validated as EA by APS.
+
+## Any yes response
+
+Create a variable that is "Yes" if "Yes" was selected for any screening item in a given screening.
+
+```{r}
+yes_counts <- screenings %>% 
+  select(unusual_odor36_na:adls61_na) %>% 
+  mutate_all(
+    funs(
+      yes = case_when(. == "Yes" ~ 1L, TRUE ~ 0L)       # 1 if Yes, 0 if anything else - including NA
+    )
+  ) %>% 
+  select(unusual_odor36_na_yes:adls61_na_yes) %>% 
+  mutate(
+    row_count = rowSums(select(., ends_with("yes"))),   # Count 1's within row across columns
+    any_yes   = if_else(row_count > 0, 1L, 0L),         # Any yes
+    any_yes_f = factor(any_yes, labels = c("No", "Yes"))
+  ) %>% 
+  select(row_count:any_yes_f)
+```
+
+Merge back with screenings
+
+```{r}
+screenings <- bind_cols(screenings, yes_counts)
+about_data(screenings) # 34 observations and 32 variables
+```
+
+Now looking just at investigations where "Yes" was selected for at least 1 survey item.
+
+```{r}
+screenings %>% filter(any_yes_f == "Yes") %>% nrow()
+```
+
+There are 16 rows (out of a possible 34 - 47%) where "Yes" was selected for at least 1 survey item (and 18 rows where "Yes" was never selected). Among those 16 rows/investigations, what was the false discovery rate?
+
+```{r}
+screenings %>% 
+  summarise(
+    TP =  sum(any_yes_f == "Yes" & any_valid_f == "Yes"),
+    FP =  sum(any_yes_f == "Yes" & any_valid_f == "No"),
+    FDR = (FP / (TP + FP)) %>% round(2)
+  )
+```
+
+False Discovery Rate = 0.06
+
+## Summary
+
+There were 34 investigations in the final analysis. Only 6 of those investigations were definitely reported to APS by MedStar (i.e., match compliance data). There were 17 screening items remaining in the analysis after removal of the NZV items (26 - 9 = 17). Among the 34 investigations analyzed, a medic selected "Yes" to at least one of the remaining screening items 16 times (47%). In 15 of those 16 investigations (94%), APS validated at least one allegation of EA. This results in a FDR of 0.06.
+
+-------------------------------------------------------------------------------
+
+&nbsp;
+
+# References:
+
+Texas Department of Family and Protective Services. “2015 Annual Report and Data Book.” Texas Department of Family and Protective Services, 2015. https://www.dfps.state.tx.us/About_DFPS/Data_Books_and_Annual_Reports/2015/pdf/Databook2015.pdf.
+
+-------------------------------------------------------------------------------
+
+&nbsp;
+
+#### Session Info:
+```{r session_info, echo=FALSE}
+sessionInfo()
+```

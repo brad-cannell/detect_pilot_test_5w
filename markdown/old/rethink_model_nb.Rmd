@@ -1,0 +1,270 @@
+---
+title: "Development of the DETECT Predictive Model"
+date: "`r Sys.Date()`"
+output: html_notebook
+---
+
+Permutations and combinations
+
+#### Load packages and functions
+
+Click the `code` button to the right to view the R code used in this step of the analysis.
+
+```{r load_packages, message=FALSE}
+library(tidyverse)
+library(caret)
+
+# devtools::install_github("mbcann01/performance")
+library(performance) 
+library(dataclean)
+```
+
+#### Load data
+
+```{r load_data}
+load("/Users/bradcannell/Dropbox/Research/2014-MU-CX-0102 DETECT/Pilot Test/detect_pilot_test/data/detect_p.RData")
+about_data(detect_p)
+```
+
+#### On load, there were 60 observations and 116 variables in the data
+
+-------------------------------------------------------------------------------
+
+# Preprocessing
+
+1. Keep 1 row per APS investigation.   
+2. Drop rows with unknown disposition.
+3. Keep outcome variable (any_valid_f) and Keep screening items with "Don't Know" recoded to NA.   
+4. Remove near-zero variance predictors.   
+5. Reorder levels of outcome variable any\_valid\_f so that "yes" is the modeled outcome.   
+
+```{r preprocess_1}
+# Keep 1 row per APS investigation
+df <- detect_p[detect_p$obs == 1, ]
+about_data(df)
+# 40 observations and 116 variables in the data 
+```
+
+```{r preprocess_2}
+# Drop rows with unknown disposition
+df <- df[!is.na(df$any_valid), ]
+about_data(df)
+# 27 observations and 116 variables in the data
+```
+
+```{r preprocess_3}
+# Keep outcome variable (any_valid_f) and Keep screening items with "Don't Know" recoded to NA
+df <- df %>%
+  select(any_valid, any_valid_f:adls61_na)
+about_data(df)
+# 27 observations and 28 variables in the data
+```
+
+```{r preprocess_4_1}
+# Remove near zero variance predictors
+nzv <- nearZeroVar(df, saveMetrics = TRUE, names = TRUE)
+nzv
+```
+
+```{r preprocess_4_2}
+cat("The names for the near zero variance variables are: \n \n")
+nzv <- nearZeroVar(df, names = TRUE)
+nzv
+cat("\nThese variables are dropped in the chunk below: \n")
+```
+
+```{r preprocess_4_3}
+df <- df[, setdiff(names(df), nzv)]
+about_data(df)
+# 27 observations and 16 variables in the data
+```
+
+```{r preprocess_5}
+# Relevel any_valid_f so that "yes" is the first level. This improves interpretability of some of the output below.
+df$any_valid_f <- forcats::fct_relevel(df$any_valid_f, "Yes")
+
+# Clean up
+rm(nzv)
+
+cat("After preprocessing, there are: \n")
+about_data(df)
+# 27 observations and 16 variables in the data 
+cat("\n")
+cat("The remaining variables are: \n")
+names(df)
+```
+
+#### Confidence Matrix for remaining variables
+
+```{r conf_matrix_1}
+# Make empty data frame that will contain the resulsts of running conf_matirx over all screeening items.
+results_na <- tibble(
+  var               = NA,
+  no                = NA,
+  yes               = NA,
+  tp                = NA,
+  fp                = NA,
+  fn                = NA,
+  tn                = NA,
+  sensativity       = NA,
+  specificity       = NA,
+  fpr               = NA,
+  fnr               = NA,
+  fdr               = NA,
+  accuracy          = NA,
+  misclassification = NA,
+  precision         = NA,
+  prevalence        = NA
+)
+
+# Relevel any_valid_f so that "no" is the first level. If not, results of confidence matrix are thrown off.
+df$any_valid_f <- forcats::fct_relevel(df$any_valid_f, "No")
+
+# Don't know recoded to NA:
+var <- names(select(df, unusual_odor36_na:adls61_na))
+r <- 1
+for (var_name in var) {
+  print(table(df[[var_name]]))
+  results_na[r, 1] <- var_name
+  results_na[r, 2] <- table(df[[var_name]])[[1]] # No
+  results_na[r, 3] <- table(df[[var_name]])[[2]] # Yes
+  results_na[r, 4:16] <- conf_matrix(
+    truth = df$any_valid_f, 
+    prediction = df[[var_name]], 
+    show_matrix = FALSE
+    )
+  r <- r + 1
+}
+
+# Drop precision and prevalence
+results_na <- results_na[, 1:14]
+
+# Create html table
+knitr::kable(results_na, col.names = c("Screening Item", "No Responses", "Yes Responses", "True Positives", "False Positives", "False Negatives", "True Negatives", "Sensitivity", "Specificity", "False Positive Rate", "False Negative Rate", "False Discovery Rate", "Accuracy", "Misclassification"))
+```
+
+
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+# Rethinking approach
+
+## Define success for this screening tool:
+
+The screening tool is successful if more reports are made in the experimental group than the control group, and there is not a greater proportion of false positives generated in the experimental group than the control group.
+
+Further, in this particular application, it's important that the processes for screening is transparent and intuitive for MedStar, APS, and the community. Therefore, we decided that decision space should only consider cumulative combinations of "yes" responses. In other words, it is not intuitive (and may be overfitting the data anyway) to say that a decision rule consists of yes to question 1, don't know to question 2, and no or don't know to question 3.
+
+# Insert tree diagram - then delete this header
+
+In [region 3 in 2015]("https://www.dfps.state.tx.us/About_DFPS/Annual_Reports_and_Data_Books/2015/pdf/Databook2015.pdf") there were 9,242 validated investigations, 4,643 invalidated investigations, 2,089 investigations that resulted in a disposition of unable to determine, and 442 investigations that resulted in a disposition of other (APS Data Book, 2016, p.14).
+
+# Insert map of Texas with region 3 overlay - then delete this header
+
+In our analysis, we only consider investigations that result in a valid or invalid disposition. The tool was not designed for, nor do we currently have the statistical power to, validate the tool's ability to predict other outcomes (e.g., death, moving before the investigation is complete, inability of APS to make contact). Therefore, to simplify matters, we may only use region 3 valid and invalid dispositions for our benchmark false positive rate to meet or exceed. Given this condition, the overall proportion of false positive reports in region 3 in 2015 was 4643 / (9242 + 4643), or 33%. If we want to be conservative and consider the proportion of all reports that were invalid, it is 4643 / (9242 + 4643 + 2089 + 442), or 28%. 
+
+Therefore, we want to find all combinations of questions that appear to have favorable predictive performance, yet generate no more than 28% false positives (the conservative baseline proportion in the population).
+
+Favorable predictive performance may be described as: PPV, LR+, sensitivity, accuracy. Because our goal is to create a report to APS for the largest proportion of older adults we encounter who are living with elder abuse, we will focus on maximizing sensitivity - while ensuring ........ **Figure X** below visually illustrates the goals of the screening tool. The collection of all dots represent all older adults in Fort Worth, TX. Blue dots represent older adults who are not living with elder abuse or neglect. 
+
+# Insert PPT diagram
+
+Create a ROC curve and anything better than 50/50 line is reported as high risk?
+
+#### What happens when I look at the sensitivity and specificity after creating a new variable that is "any" yes?
+
+```{r any_yes}
+df2 <- df %>%
+  # Convert to numeric
+  map_at(
+    .at = 3:16,
+    .f  = function(x) {
+      x <- as.numeric(x)
+      x[x == 1] <- 0
+      x[x == 2] <- 1
+      return(x)
+    }
+  ) %>% 
+  as_tibble %>%
+  mutate(
+    sum = rowSums(.[3:16], na.rm = TRUE),
+    any_yes = ifelse(sum > 0, 1, 0))
+```
+
+```{r any_yes_matrix}
+conf_matrix(df2$any_valid, df2$any_yes)
+```
+
+
+
+
+```{r test}
+# Create a function that iterates through all yes combinations and calculates the sensativity and false discovery rate. 
+
+# Start with a small example for testing
+test <- df[, 2:4]
+
+
+# Make combination matrix (See Evernote)
+# I have 2 variables with 2 possible outcomes
+# I want to find all possible combinations of yes and no
+grid <- df %>%
+  select(unusual_odor36_na, hoarding38_na) %>%
+  map(.f = function(x) {
+    x <- addNA(x)
+    x <- levels(x)}) %>%
+  as_tibble %>%
+  expand.grid
+
+# Do the values in grid[1, ] match the values in test[1, ]?
+grid[1, ] == test[1, 2:3]
+sum(grid[1, ] == test[1, 2:3])
+
+grid[1, ] == test[2, 2:3]
+sum(grid[1, ] == test[2, 2:3])
+
+grid[8, ] == test[2, 2:3]
+sum(grid[8, ] == test[2, 2:3])
+# If I continue down this path, I will have to convert NA to "Missing"
+# Or, maybe I should just be looking for combinations of yes's?
+
+# For each row in grid, count the number of rows in test with a matching variable values that resulted in valid and invalid investigations.
+for (i in 1:nrow(grid)) {
+  print(grid[i, ])
+}
+
+
+
+
+# Calculate sensitivity and FDR for each combination
+
+
+
+# Would be nice to add number of times that combination is observed as a measure of confidence
+
+# Make nice tabular output that can be sorted and displayed
+```
+
+-------------------------------------------------------------------------------
+
+&nbsp;
+
+# References:
+
+APS data book - Add proper citation
+
+-------------------------------------------------------------------------------
+
+&nbsp;
+
+#### Session Info:
+```{r session_info, echo=FALSE}
+sessionInfo()
+```

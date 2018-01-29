@@ -1,0 +1,75 @@
+---
+title: "MedStar Screening Data Codebook"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: false
+    code_folding: show
+---
+
+```{r setup, echo = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = ">")
+
+# Set working directory
+knitr::opts_knit$set(root.dir = "/Users/bradcannell/Dropbox/Research/2014-MU-CX-0102 DETECT/Pilot Test/detect_pilot_test")
+```
+
+-------------------------------------------------------------------------------
+
+```{r load_packages, message=FALSE, echo=FALSE}
+# CRAN packages
+library(tidyverse)
+
+# devtools::install_github("mbcann01/dataclean")
+library(dataclean)
+```
+
+```{r load_data, echo=FALSE}
+load("data/medstar_nid.RData")
+```
+
+-------------------------------------------------------------------------------   
+
+```{r create_labels, echo=FALSE}
+lab <- c(
+  "Age at screening",
+  "Unusual odor (e.g. urine, feces)",
+  "One or more utilities are not operational (no water electric, heating/cooling)",
+  "Inside of the home is in extreme disarray / hoarding",
+  "Living environment poses a health or safety concern (e.g. fire hazard, insect or rodent infestation, urine or feces present)",
+  "Open alcohol containers or other alcohol/drug paraphernalia present",
+  "To lack knowledge of the patient/older adult's medical need(s)",
+  "Unengaged and inattentive in caring for the patient/older adult",
+  "Overwhelmed by the patient / older adult",
+  "Frustrated, tired, angry, or burdened by the patient/older adult",
+  "Overly concerned (e.g. anxious, hovering)",
+  "To be deceptive or withhold information from you",
+  "To give you information that is inconsistent with the patient / older adult's account",
+  "To be under the influence of alcohol and/or illicit drugs",
+  "To be dependent on the patient / older adult for financial or other needs",
+  "Does the patient / older adult appear to lack social support or family that cares for them?",
+  "Does the patient / older adult hesitate to talk with you or discuss their condition in front of the caregiver?",
+  "Isolated in the home",
+  "Have suspicious falls, wounds, and/or injuries",
+  "Show evidence of any old injuries that have been left untreated",
+  "Under the influence of alcohol and/or illicit drugs",
+  "Appear depressed, anxious, or emotionally distressed for reasons other than their immediate medical condition",
+  "Have poor personal hygiene (including soiled in urine or feces)",
+  "Inadequately clothed or wearing dirty, torn, or soiled clothing",
+  "Have difficulties taking their prescribed medications as directed",
+  "Appear to be hoarding/saving old medications",
+  "Need assistance with eating, toileting, transferring, dressing, or bathing"
+)
+```
+
+```{r create_codebook, highlight=FALSE, comment="", echo=FALSE}
+codebook(medstar_nid, label = lab)
+```
+
+-------------------------------------------------------------------------------
+
+#### Session Info:
+```{r session_info, echo=FALSE}
+sessionInfo()
+```

@@ -1,0 +1,351 @@
+---
+title: "Development of the DETECT Predictive Model"
+date: "`r Sys.Date()`"
+output: 
+  html_notebook:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    # css: custom-css.css
+---
+
+```{r setup, echo = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = ">")
+
+# Set working directory
+knitr::opts_knit$set(root.dir = "/Users/bradcannell/Dropbox/Research/2014-MU-CX-0102 DETECT/Pilot Test/detect_pilot_test")
+```
+
+-------------------------------------------------------------------------------
+
+#### Load packages and functions
+
+Click the `code` button to the right to view the R code used in this step of the analysis.
+
+```{r load_packages, message=FALSE}
+library(plyr)
+library(tidyverse)
+library(caret)
+library(C50)
+library(rpart)
+library(partykit)
+
+# devtools::install_github("mbcann01/performance")
+library(performance) 
+library(dataclean)
+```
+
+#### Load data
+
+Click the `code` button to the right to view the R code used in this step of the analysis.
+
+```{r load_data}
+load("data/detect_p.RData")
+about_data(detect_p)
+```
+
+#### On load, there were 60 observations and 116 variables in the data
+
+-------------------------------------------------------------------------------
+
+# Preprocessing
+
+1. Keep 1 row per APS investigation.   
+2. Drop rows with unknown disposition.
+3. Remove near-zero variance predictors.   
+4. Remove predictors for which a yes response was never observed.   
+5. Remove non-predictor variables.  
+6. Reorder levels of outcome variable any\_valid\_f so that "yes" is the modeled outcome.   
+
+```{r preprocess}
+# Keep 1 row per APS investigation
+df <- detect_p[detect_p$obs == 1, ]
+about_data(df)
+# 40 observations and 116 variables in the data 
+
+# Drop rows with unknown disposition
+df <- df[!is.na(df$any_valid), ]
+about_data(df)
+# 27 observations and 116 variables in the data
+
+# For now, just keep the orginal (non-recoded) screening items
+df <- df[, 1:38]
+about_data(df)
+# 27 observations and 38 variables in the data
+# I may want to come back and use the data with don't know recoded to NA or Yes.
+
+# Remove near zero variance predictors
+nzv <- nearZeroVar(df, saveMetrics = TRUE, names = TRUE)
+nzv
+nzv <- nearZeroVar(df, names = TRUE)
+nzv
+df <- df[, setdiff(names(df), nzv)]
+about_data(df)
+# Currently dropping 4 vars: "no_utils37", "alc_containers40", "alcdrugs55", "obs"
+# May want to come back and make this less conservative.
+# 27 observations and 34 variables in the data
+
+# Remove predictors for which a yes response was never observed.
+drop <- c("cg_alcdrugs48", "cg_bad_info47", "cg_deceptive46", "cg_dependent49", 
+  "no_talk51", "old_injuries54", "socsup50")
+df <- df[, setdiff(names(df), drop)]
+about_data(df)
+# 27 observations and 27 variables in the data
+  
+# Remove non-predictor variables
+df <- df %>%
+  select(unusual_odor36:adls61, any_valid_f)
+about_data(df)
+
+# Relevel any_valid_f so that "yes" is the first level. This improves interpretability of some of the models below. Otherwise the are predicting "No".
+df$any_valid_f <- forcats::fct_relevel(df$any_valid_f, "Yes")
+
+rm(nzv, drop)
+```
+
+27 observations and 17 variables in the data.    
+
+## Outcome class imbalance
+
+```{r class_imbalance}
+table(df$any_valid_f)
+table(df$any_valid_f) / sum(!is.na(df$any_valid_f)) * 100
+```
+
+Data is imbalanced:   
+* 6 records with no valid elder abuse (22%) 
+* 21 records with valid elder abuse (78%)
+
+Correct class imbalance issues:   
+* Resampling methods (up-sampling)   
+
+upSample samples with replacement to make the class distributions equal (Kuhn & Johnson, 2013, p. 427).
+
+```{r upsample}
+set.seed(102116)
+upsampled <- upSample(
+  x = select(df, -any_valid_f),
+  y = unlist(select(df, any_valid_f)), 
+  yname = "any_valid_f"
+)
+about_data(upsampled)
+table(upsampled$any_valid_f)
+```
+
+42 observations and 17 variables in the data
+
+## Item non-response (Missing data)
+
+Some of the predictive modeling techniques used below will not accept item non-response (missing data). Additionally, we are interested in the performance of modeling yes responses vs. anything else. Therefore, we will create a second version of the data with each screening question recoded to yes, if it was previously yes, and AE if it was previously anything else (including missing).
+
+```{r missing_data}
+# Recode responses to Yes vs. Anything Else
+set.seed(102316)
+upsampled_nomiss <- upsampled %>%
+  map_at(
+    .at = 1:16,
+    .f  = function(x) {
+      x <- as.character(x)
+      x <- ifelse(x != "Yes" | is.na(x), "AE", "Yes")
+      x <- factor(x)
+      return(x)
+    }
+  ) %>%
+  as.data.frame
+
+
+# Do the same thing to df for later testing
+df_nomiss <- df %>%
+  map_at(
+    .at = 1:16,
+    .f  = function(x) {
+      x <- as.character(x)
+      x <- ifelse(x != "Yes" | is.na(x), "AE", "Yes")
+      x <- factor(x)
+      return(x)
+    }
+  ) %>%
+  as.data.frame
+```
+
+After recoding in this way, we are left with two screening items that have a value of AE for every observation. As previously discussed, these zero variance predictors need to be removed.
+
+```{r nzv_2}
+nzv <- nearZeroVar(upsampled_nomiss, saveMetrics = TRUE, names = TRUE)
+nzv
+nzv <- nearZeroVar(upsampled_nomiss, names = TRUE)
+nzv
+
+upsampled_nomiss <- upsampled_nomiss[, setdiff(names(upsampled_nomiss), nzv)]
+
+about_data(upsampled_nomiss)
+rm(nzv)
+```
+
+42 observations and 11 variables in the data    
+
+## Data splitting
+
+> When the number of samples is not large, a strong case can be made that a test set should be avoided because every sample may be needed for model building... Resampling methods, such as cross-validation, can be used to produce appropriate estimates of model performance using the training set (Kuhn & Johnson, 2013, p. 67).
+
+We will use repeated 10-fold cross-validation.   
+
+> No resampling method is uniformly better than another; the choice should be made while considering several factors. If the sample size is small, we recommend repeated 10-fold cross-validation for several reasons: the bias and variance properties are good and, given the sample size, the computational costs are not large (Kuhn & Johnson, 2013, p. 78).
+
+## Make custom train/test indices
+
+Here we create a reusable trainControl object, which can be used to reliably compare multiple models. 
+
+```{r train_control}
+# Create custom indices: myFolds
+# Use createFolds() to create 5 cross-validation folds on upsampled$any_valid_f, the target variable (Kuhn & Johnson, 2013, p. 82).
+set.seed(101716)
+myFolds <- createMultiFolds(upsampled$any_valid_f, k = 10, times = 5)
+
+# Create reusable trainControl object: myControl
+myControl <- trainControl(
+  summaryFunction = twoClassSummary,
+  classProbs = TRUE, # IMPORTANT!
+  verboseIter = TRUE,
+  savePredictions = TRUE,
+  index = myFolds
+)
+```
+
+-------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+## Train models
+
+### Start with logistic regression benchmark
+
+```{r train_glm_model}
+# Fit glm model: model_glm
+# GLM fit upsampled poorly, and several coefficients could not be estimated.
+model_glm <- train(
+  x = upsampled_nomiss[, 1:10], 
+  y = upsampled_nomiss$any_valid_f,
+  metric = "ROC",
+  method = "glm",
+  trControl = myControl
+)
+
+# Print model to console
+model_glm
+
+# Print model results
+knitr::kable(model_glm$results)
+```
+
+### Then fit a random forest model as a second benchmark
+
+```{r train_rf_model}
+# Fit random forest model
+model_rf <- train(
+  x = upsampled_nomiss[, 1:10],
+  y = upsampled_nomiss$any_valid_f,
+  method = "ranger",
+  metric = "ROC",
+  trControl = myControl,
+  tuneLength = 1
+)
+
+# Print model to console
+model_rf
+
+# Print model results
+knitr::kable(model_rf$results)
+```
+
+### Then fit decision tree / decision rules for simplicity
+
+> Tree-based and rule-based models are popular modeling tools for a number of reasons. First, they generate a set of conditions that are highly interpretable and are easy to implement. Because of the logic of their construction, they can effectively handle many types of predictors (sparse, skewed, continuous, categorical, etc.) without the need to pre-process them. In addition, these models do not require the user to specify the form of the predictors’ relationship to the response like, for example, a regression model requires. Furthermore, these models can effectively handle missing data and implicitly conduct feature selection, characteristics that are desirable for many real-life modeling problems. Models based on single trees or rules, however, do have particular weaknesses. Two well-known weaknesses are (1) model instability (i.e., slight changes in the data can drastically change the structure of the tree or rules and hence, interpretation) and (2) less-than-optimal predictive performance. The latter is due to the fact that these models define rectangular regions that contain more homogenous outcome values. If the relationship between predictors and the response cannot be adequately defined by rectangular subspaces of the predictors, then tree-based or rule-based models will have larger prediction error than other kinds of models (Kuhn & Johnson, 2013, p. 174).
+
+We are working with a community partner to implement this screening tool. It will be important that they understand and trust the screening process. Additionally, when reports are made to APS, it will be important being able to convey clear and understandable reasons why abuse was suspected. Finally, the final prediction model will need to be programmed into MedStar’s Electronic Patient Care Reporting System (EPCR), and maintained by its internal IT department. For all of these reasons, we decided that it was important to prioritize model interpretability.
+
+### C5.0 Decision tree
+
+```{r train_c50_model}
+model_c50 <- train(
+  x = upsampled_nomiss[, 1:10],
+  y = upsampled_nomiss$any_valid_f,
+  method = "C5.0",
+  metric = "ROC",
+  trControl = myControl
+)
+
+# Print model to console
+model_c50
+
+# Print model results
+knitr::kable(model_c50$results)
+```
+
+### CART Decision tree
+
+```{r train_rpart_model_1}
+# CART tree
+model_rpart <- train(
+  x = upsampled_nomiss[, 1:10],
+  y = upsampled_nomiss$any_valid_f,
+  method = "rpart",
+  metric = "ROC",
+  trControl = myControl
+)
+
+# Print model to console
+model_rpart
+
+# Print model results
+knitr::kable(model_rpart$results)
+```
+
+### Single CART decision tree
+
+```{r train_rpart_model_2}
+# Create single CART tree
+model_rpart2 <- rpart(any_valid_f ~ ., data = upsampled_nomiss, 
+  control = rpart.control(minsplit = 1L)) 
+
+model_rpart2
+summary(model_rpart2)
+
+model_rpart2_party <- as.party(model_rpart2)
+plot(model_rpart2_party)
+```
+
+Take a closer look at the node with 30 observations remaining
+
+```{r train_rpart_model_3, eval=FALSE}
+# There should be 30 observations where hording = AE, clothing = AE, unusual odor = AE, and lack knowledge = AE.
+upsampled_nomiss %>%
+  filter(hoarding38 == "AE" & clothing58 == "AE" & unusual_odor36 == "AE" & 
+      cg_lack_know41 == "AE")
+```
+
+There is no response variation remaining for the predictors in the n = 30 leaf node.
+
+-------------------------------------------------------------------------------
+
+&nbsp;
+
+# References:
+
+Kuhn, M., & Johnson, K. (2013). Applied predictive modeling. New York: Springer.
+
+-------------------------------------------------------------------------------
+
+&nbsp;
+
+#### Session Info:
+```{r session_info, echo=FALSE}
+sessionInfo()
+```

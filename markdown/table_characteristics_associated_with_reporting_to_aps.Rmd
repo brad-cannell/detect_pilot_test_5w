@@ -1,0 +1,576 @@
+---
+title: "Characteristics associated with reporting to APS"
+output:
+  word_document:
+    reference_docx: word_style_template_01.docx
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_packages, message=FALSE}
+# Load packages
+library(tidyverse)
+library(feather)
+library(stringr)
+```
+
+## Load data
+
+medstar_detect_demo.feather was created in data_clean_medstar.Rmd    
+medstar_detect.feather was created in data_clean_medstar.Rmd   
+merged_screening_recode.RData was created in preprocess_for_analysis.Rmd   
+
+```{r}
+medstar_dd <- read_feather("/Users/bradcannell/Desktop/medstar_detect_demo.feather")
+medstar_d  <- read_feather("/Users/bradcannell/Desktop/medstar_detect.feather")
+merged_sr  <- read_rds("/Users/bradcannell/Desktop/merged_screening_recode.RData")
+```
+
+What characteristics (demographic and medical) of the older adult were associated with a report to APS?
+
+### Data management
+
+Select response number for screenings that were reported to APS.
+
+```{r}
+reported <- merged_sr %>% pull(response_num) %>% unique()
+```
+
+Reduce the demographics and health data to a single row per response / person.
+
+```{r}
+characteristics <- medstar_dd %>% 
+  group_by(incident_call_number, first_name) %>% 
+  mutate(incident_row = row_number()) %>% 
+  filter(incident_row == 1) %>%  # Keep one row per incident / name
+  ungroup() %>% 
+  mutate(date = as.Date(date_entered)) %>% 
+  filter(date < "2015-10-27") # No screenings on 2015-10-27
+```
+
+Add a tag to the data that indicates when a report was made to APS.
+
+```{r}
+characteristics <- characteristics %>% mutate(reported = incident_call_number %in% reported)
+rm(reported)
+```
+
+How many reported?
+
+```{r}
+characteristics %>% group_by(reported) %>% summarise(n())
+```
+
+#### Race
+
+Originally, we used White, Black, Hispanic, Asian, and other as the categories. 
+
+```{r}
+characteristics <- characteristics %>% 
+  mutate(
+    race = case_when(
+      race %in% c("Not Documented", "Not Available") ~ NA_character_,
+      race %in% c("American Indian or Alaska Native", "Native Hawaiian or Other Pacific Islander") ~ "Other Race",
+      TRUE  ~ race %>% as.character()
+    ),
+    race = factor(race,
+      levels = c("White", "Black or African American", "Hispanic or Latino", "Asian", "Other Race")
+    ),
+    race = forcats::fct_collapse(race,
+      White = "White",
+      Black = "Black or African American",
+      "Other race or ethnicity" = c("Hispanic or Latino", "Asian", "Other Race")
+    )
+  )
+```
+
+#### Chief complaint
+
+There are 1,000 values for chief complaint. However, this must have been a free text field.
+
+* Some differences are due to capitalization and spelling
+
+* There are wierd characters sprinkled throughout that need to be removed
+
+* There are numerous complaints that are slight variations of each other (e.g. abd cramping, abd pain)
+
+```{r}
+# Groups of similar complaints to be used in string replacement patterns below
+abdominal <- str_c("^abd", "colon", "hernia", "llq abd pain", "llq abdominal pain", "lower abd pain", 
+                   "lower abdominal pain", "stomach ache",  sep = "|")
+ams       <- str_c("alerted mental status", "ams", "altered mental status", "change in mental status", 
+                   "confus", "delusional", "dementia", "cunfusion", "incoherent", "slurred speech",
+                   sep = "|")
+aloc      <- str_c("aloc", "altered level of consciousness", "altered loc", "decreased loc", "passed out", 
+                   "sycopal episode", "unconscious", "unresponsive", sep = "|")
+back      <- str_c("backpain", "back.*(pain|pn)", "pain.*back", "back spasms", sep = "|")
+behavior  <- str_c("abnormal behavior", "acting odd", "^agitation", "anxiety", "anxious", 
+                   "auditory halucinations", "behavioral", "bipolar", "depression", "hallucinations", 
+                   "hearing voices", "psych", "seeing things", "sleep", "speech", "stumbling", 
+                   "suicudal ideation", "walking", sep = "|")
+bleeding  <- str_c("bleed", "blood(?!.*(pressure|sugar))", "clots", sep = "|")
+breath    <- str_c("asthma", "breath", "breeathing", "breath", "chok", "copd", "cough", "dyspnea", 
+                   "esophagus", "resp distress", "respiratory", "s-o-b", "s.o.b.", "sob", "throat",
+                   sep = "|")
+bugs      <- str_c("bed bugs", "bug bite", sep = "|")
+card      <- str_c("blood pressure", "bradycardia", "c/p", "intermittant cp", "cardiac", "chest", "^cp", 
+                   "defib", "heart", "high bp", "htn", "hypertension", "hypotension", "hypotensive", 
+                   "l sided cp", "palpat", "palpitations", "syncope", "sycope", "syncopal", "ventricular", 
+                   sep = "|")
+death     <- str_c("deceased", "death", "dos", sep = "|")
+diab      <- str_c("diabet", "dialysis", "sugar", "htpoglycemia", "hyperglycemia", "hypoglicima", 
+                  "hypoglycemia", "hypoglycemic", "hypogylcemia",  sep = "|")
+dizz      <- str_c("dizz", "vertigo", sep = "|")
+drug      <- str_c("intoxicated", "overdose", "alcoholism", sep = "|")
+fall      <- str_c("fall", "fell", "fainted", "glf", "lift", "slip", "stuck on the floor", 
+                   sep = "|")
+general   <- str_c("allergic", "anaphylaxis", "body aches", "body pain", "burn", "chills", "congestion", 
+                   "diahreah", "diahrrea", "diarrhea", "doesnt feel well", "dont feel right", "dont feel well",
+                   "feeling sick", "feeling terrible", "fever", "flu", "general pain", "i dont feel good",
+                   "indigestion", "infection", "lathargic", "lethargic", "malaise", "migraine", "nausea",    
+                   "not feeling well", "n/v", "n/v/d", "pneumonia", "sick", "stuffy nose", "tired",
+                   "vomit", "weak", sep = "|")
+head      <- str_c("epistaxis", "facial", "head", "eyebrow", "forehead", "face", "eye pain", "h/a", sep = "|")
+lower     <- str_c("foot", "leg", "ankle", "hip", "knee", "bdoy pain", "lower ext swelling", 
+                   "lower extremities", "feet", sep = "|")
+meds      <- str_c("meds", "medication", "tramadol", "xanax", sep = "|")
+none      <- str_c("denies complaint", "home visit", "interfacility", "mhp visit", "no complaint", "none", 
+                   "pt denies any complaints", "ras", "release at scene", "transfer", "transport", 
+                   sep = "|")
+pain      <- str_c("pain", "numb", sep = "|")
+seize     <- str_c("seizure", "sz", sep = "|")
+stroke    <- str_c("cva", "stroke", sep = "|")
+toilet    <- str_c("cath", "constipation", "urin", "uti", "tarry stool", "unable to void completely", 
+                   sep = "|")
+upper     <- str_c("arm", "shoulder", "wrist", "hand", "elbow", "collar bone", sep = "|")
+violence  <- str_c("aps removal", "assault", "electricity is turned off", "interpersonal conflict with family", 
+                   "neglect", "no caretaker", "unsafe living conditions/ mental incapacity", 
+                   "wants to leave sons", sep = "|")
+vission   <- str_c("blurred", "vision", sep = "|")
+wasting   <- str_c("decreased appetite", "decreased intake", "dehydration", "failure to thrive",  
+                   "feeding tube replacement", "limited mobility", "no appetite", "not eating",  
+                   "skin tear", "skin tera", sep = "|")
+
+characteristics <- characteristics %>% 
+  mutate(
+    # Make all lower case - will also coerce to character
+    chief_complaint = chief_complaint %>% tolower(),
+    
+    # Remove quotation marks
+    # After a investigating, these are double quotes, they are two single quotes back-to-back
+    chief_complaint = stringr::str_replace_all(chief_complaint, "'", ""),
+    
+    # Remove other misc weird characters
+    chief_complaint = stringr::str_replace_all(chief_complaint, "\\(l\\)", ""),
+    
+    # Group together slight variations
+    # Order matters, e.g. “we want back pain from fall” in the falls category, not the back pain category
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, violence), 
+                              "Violence or neglect", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, wasting), 
+                              "Failure to thrive", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, aloc), 
+                              "Altered level of consciousness", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, behavior), 
+                              "Behavioral", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, ams), 
+                              "Altered mental status", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, fall), 
+                              "Fall related", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, drug), 
+                              "Drugs or alcohol", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, toilet), 
+                              "Catheter / Urine / Stool related", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, bleeding), 
+                              "Bleeding", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, meds), 
+                              "Medication related complaint", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, head), 
+                              "Head or face complaint", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, lower), 
+                              "Lower extremity complaint", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, upper), 
+                              "Upper extremity complaint", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, abdominal), 
+                              "Abdominal pain or nausea", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, back), 
+                              "Back related", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, card), 
+                              "Cardiovascular complaints", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, breath), 
+                              "Breathing complaints", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, diab), 
+                              "Diabetes complaints", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, dizz), 
+                              "Dizziness complaints", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, stroke), 
+                              "Stroke", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, seize), 
+                              "Seizure", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, general), 
+                              "General complaints of illness", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, bugs), 
+                              "Bugs", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, vission), 
+                              "Vission", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, death), 
+                              "Death", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, none), 
+                              "No complaint or transfer", chief_complaint),
+    chief_complaint = if_else(stringr::str_detect(chief_complaint, pain), 
+                              "Other pain or numbness", chief_complaint)
+  )
+
+# Remove patterns
+rm(abdominal, ams, aloc, back, behavior, bleeding, breath, bugs, card, death, diab, dizz, drug, fall, 
+   general, head, lower, meds, none, pain, seize, stroke, toilet, upper, violence, vission, wasting)
+```
+
+```{r}
+# Data check
+characteristics %>%
+  group_by(chief_complaint) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n))
+```
+
+After grouping similar complaints, there are still 84 different categories. To reduce the number of categories, we will group together the least often observed complaints as Other. We will group everything observed fewer than 9 times together for two reasons. First, there appears to be a natural break in the data at around 9. The number of observations per item falls off rapidly after that. Second, the category we are calling violence or neglect is observed 9 times, and it seems important to keep it intact for this analysis. 
+
+```{r}
+keep <- characteristics %>% 
+  group_by(chief_complaint) %>%
+  summarise(n = n()) %>% 
+  filter(n >= 9) %>% 
+  pull(chief_complaint)
+
+characteristics <- characteristics %>% 
+  mutate(
+    chief_complaint = chief_complaint %>% as.character(),
+    chief_complaint = if_else(chief_complaint %in% keep, chief_complaint, "Other", NA_character_),
+    chief_complaint = chief_complaint %>% factor(),
+    chief_complaint = forcats::fct_infreq(chief_complaint)
+  )
+
+rm(keep)
+```
+
+After viewing the table (below) there were still too many categories (24) for our sample size. We need to do some more collapsing.
+
+```{r}
+# Data check
+# characteristics %>%
+#   group_by(chief_complaint) %>%
+#   summarise(n = n()) %>%
+#   arrange(desc(n))
+```
+
+```{r}
+characteristics <- characteristics %>% 
+  mutate(
+    chief_complaint = forcats::fct_collapse(characteristics$chief_complaint,
+      "Illness"                      = c("General complaints of illness", "Cardiovascular complaints", 
+                                         "Breathing complaints", "Diabetes complaints", "Dizziness complaints", 
+                                         "Other pain or numbness", "Catheter / Urine / Stool related", 
+                                         "Seizure", "Stroke"),
+      "Injury and pain"              = c("Lower extremity complaint", "Head or face complaint", 
+                                         "Upper extremity complaint", "Bleeding", "Back related", 
+                                         "Other pain or numbness"),
+      "Behavioral and mental status" = c("Altered mental status", "Behavioral", "Altered level of consciousness"),
+      "Violence or neglect"          = c("Failure to thrive", "Violence or neglect")
+    ),
+    chief_complaint = forcats::fct_infreq(chief_complaint)
+  )
+```
+
+Now we are down to 9 categories of complains (8 without NA).
+
+#### Primary impression
+
+```{r}
+# Data check
+characteristics %>% 
+  group_by(primary_impression) %>% 
+  summarise(n = n()) %>% 
+  arrange(desc(n))
+```
+
+This will take a lot of recoding. Hold off and come back to it.
+
+#### Primary symptom
+
+```{r}
+characteristics %>% 
+  group_by(primary_symptom) %>% 
+  summarise(n = n()) %>% 
+  arrange(desc(n))
+```
+
+This will take a lot of recoding. Hold off and come back to it.
+
+#### Drug use
+
+```{r}
+# Data check
+characteristics %>%
+  group_by(drug_use) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n))
+```
+
+```{r}
+characteristics <- characteristics %>% 
+  mutate(
+    drug_use = forcats::fct_collapse(drug_use,
+      "Reported drug or alcohol use" = c("Patient Admits to Alcohol Use", 
+                                         "Alcoholic Beverage like smell on Person", "Patient Admits to Drug Use",
+                                         "Alcohol / Drug Use Reported by Other", 
+                                         "Alcohol and/or Drug Paraphernalia at Scene")
+    ),
+    drug_use = forcats::fct_relevel(drug_use,
+      "Patient Denies Alcohol and Drug Use", "Reported drug or alcohol use", "Uknown"
+    )
+  )
+```
+
+The only real difference is in unknown. It isn't clear what the implications for that are.
+
+#### Crew
+
+```{r}
+# characteristics %>% 
+#   group_by(crew_member_id, reported) %>% 
+#   summarise(n = n()) %>% 
+#   mutate(
+#     cs = cumsum(n),
+#     percent = (n / max(cs) * 100) %>% round(1),
+#     value = paste0(n, " (", percent, ")")
+#   ) %>% 
+#   select(crew_member_id, reported, value) %>% 
+#   spread(reported, value) %>% 
+#   arrange(`TRUE`)
+```
+
+It is interesting to look at whether some medics are more likely to report than others. However, I think it's dangerous to do so with this data due to small sample sizes.
+
+#### History
+
+```{r}
+# characteristics %>% 
+#   group_by(medical_surgery_hist) %>% 
+#   summarise(n = n()) %>% 
+#   arrange(desc(n))
+```
+
+This variable is not terribly interesting
+
+#### meds
+
+```{r}
+# characteristics %>% 
+#   group_by(current_meds) %>% 
+#   summarise(n = n()) %>% 
+#   arrange(desc(n))
+```
+
+This variable needs a lot of recoding.
+
+
+
+
+
+
+
+
+
+
+
+
+### Make a table of characteristics
+
+Create table shell
+
+```{r}
+table <- tibble(
+  Characteristic = vector(mode = "character"),
+  Level          = vector(mode = "character"),
+  `Not Reported` = vector(mode = "character"),
+  Reported       = vector(mode = "character")
+)
+```
+
+Add group sample sizes to table
+
+```{r}
+table[1, 1:2] <- "" # Better than "NA"
+
+table[1, 3] <- group_by(characteristics, reported) %>% summarise(N = n()) %>% pull(N) %>% 
+  `[`(1) %>% paste("N =", .)
+
+table[1, 4] <- group_by(characteristics, reported) %>% summarise(N = n()) %>% pull(N) %>% 
+  `[`(2) %>% paste("N =", .)
+```
+
+Make function to calculate percentages for categorical variables
+
+```{r}
+# For data checking - if necessary
+# characteristics %>%
+#   group_by(reported, gender) %>%
+#   summarise(N = n()) %>%
+#   mutate(
+#     cum = cumsum(N),
+#     percent = (N / max(cum) * 100) %>% round(1) %>% paste0(., "%")
+#   )
+```
+
+```{r}
+row_percent <- function(df = characteristics, cat_var, for_loop = TRUE) {
+  if(for_loop == FALSE) {
+    # Transform to quoture - if using a for loop, I transformed to quoture outside of loop.
+    cat_var <- enquo(cat_var) 
+  }
+
+  df %>%
+    # Remove NA as a category
+    filter(!is.na(!!cat_var)) %>% 
+    
+    # Names must match the names in the tabel shell for bind_rows to work
+    mutate(reported = if_else(reported == TRUE, "Reported", "Not Reported")) %>% 
+    
+    # Calculating stats
+    group_by(reported, !!cat_var) %>%
+    summarise(n = n()) %>% 
+    mutate(
+      cum = cumsum(n),
+      percent = (n / max(cum) * 100) %>% round(1) %>% paste0(., "%")
+    ) %>% 
+    
+    # Combine n and percent
+    mutate(value = paste0(n, " (", percent, ")")) %>% 
+    select(reported, !!cat_var, value) %>% 
+    
+    # Turn Not Reported and Reported into columns
+    spread(key = reported, value = value) %>% 
+    
+    # 0.0% instead of NA if there are no obs for a category
+    replace_na(., list(`Not Reported` = "0.0%", Reported = "0.0%")) %>% 
+    
+    # Grab variable name and capitalize first letter
+    mutate(
+      Characteristic = !!quo_name(cat_var),
+      Characteristic = stringr::str_replace(
+        string = Characteristic,
+        pattern = "^.",
+        replacement = stringr::str_extract(Characteristic, "^.") %>% toupper()
+      ),
+      Characteristic = paste0(Characteristic, ", n (percent)"),
+      
+      # Only keep var name in first row - not repeat in every row
+      count = row_number(),
+      Characteristic = if_else(count > 1, "", Characteristic)
+    ) %>%
+    
+    # Move variable name to first column
+    select(Characteristic, !!cat_var, `Not Reported`, Reported) %>%
+    
+    # Change levels from factor to character to prevent 1, 2, 3 as categories
+    mutate(!!quo_name(cat_var) := rlang::UQ(cat_var) %>% as.character()) %>% 
+    
+    # Change name of second column to Level for bind_rows to work
+    rename(Level = !!cat_var)
+}
+# row_percent(cat_var = gender)
+```
+
+Make function to calculate means for continuous variables
+
+```{r}
+# For data checking - if necessary
+# characteristics %>%
+#   group_by(reported) %>%
+#   summarise(
+#     n = n(),
+#     n_miss = sum(is.na(age)),
+#     mean = mean(age) %>% round(1)
+#   )
+```
+
+```{r}
+row_mean <- function(df = characteristics, num_var, for_loop = TRUE) {
+  if(for_loop == FALSE) {
+    # Transform to quoture - if using a for loop, I transformed to quoture outside of loop.
+    num_var <- enquo(num_var) 
+  }
+  
+  characteristics %>%
+    # Names must match the names in the tabel shell for bind_rows to work
+    mutate(reported = if_else(reported == TRUE, "Reported", "Not Reported")) %>%
+    
+    # Calculating stats
+    group_by(reported) %>%
+    summarise(
+      n = n(),
+      n_miss = sum(is.na(!!num_var)),
+      mean = mean(!!num_var, na.rm = TRUE) %>% round(1)
+    ) %>% 
+    
+    # Combine n and mean
+    mutate(value = paste0(n, " (", mean, ")")) %>% 
+    select(reported, value) %>% 
+    
+    # Turn Not Reported and Reported into columns
+    spread(key = reported, value = value) %>% 
+    
+    # Grab variable name and capitalize first letter
+    mutate(
+      Characteristic = !!quo_name(num_var),
+      Characteristic = stringr::str_replace(
+        string = Characteristic,
+        pattern = "^.",
+        replacement = stringr::str_extract(Characteristic, "^.") %>% toupper()
+      ),
+      Characteristic = paste0(Characteristic, ", n (mean)"),
+      Level = "Continuous"
+    ) %>%
+    
+    # Move variable name to first column
+    select(Characteristic, Level, `Not Reported`, Reported)
+}
+# row_mean(num_var = age)
+```
+
+Fill in table values
+
+age, gender, race, chief_complaint, primary_impression, primary_symptom, drug_use, crew_member_id,
+             medical_surgery_hist, current_meds, city
+
+```{r rows.print=33}
+vars <- quos(age, gender, race)
+
+for(i in seq_along(vars)) {
+  test_type <- characteristics %>% pull(!!vars[[i]])
+  if(is.numeric(test_type)) {
+    table <- bind_rows(table, row_mean(num_var = vars[[i]]))
+  } else {
+    table <- bind_rows(table, row_percent(cat_var = vars[[i]]))
+  }
+}
+
+rm(i, test_type, vars)
+
+table
+```
+
+### Summary of table
+
+Chief complaint is actually pretty interesting. Specifically, what was the complaint of the 4 "Others" that were reported? What was the complaint of the 21 in the "Violence or neglect category" that weren't reported?
+
+Primary impression, primary symptom, drug use, crew member and medications were also interesting in similar ways.
+
+Unfortunately, our current sample size does not allow us to fully investigate these relationships. Many of the cell size are small, and including them in the current analysis may result in drawing misleading or incorrect conclusions.
+
+Even so, some interesting patterns remain in the table. Those who were reported to APS were slightly younger, more likely to be a woman, and more likely to be non-White than those who were not reported. 
+
+It’s important to remember that from this data we are unable to differentiate whether or not these differences reflect true differences in underlying risk, or if they are symptomatic of reporting bias. For example, are more women reported because a great proportion of women than men that were screened by a medic were living with abuse? Or, are medics more likely to notice signs of abuse in women? Or, are medics more likely to report women to APS, given a set of signs and symptoms?

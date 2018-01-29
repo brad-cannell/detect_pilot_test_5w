@@ -1,0 +1,153 @@
+---
+title: "Characteristics Of APS Investigations That Could Be Linked To DETECT Screenings"
+date: "Created: 2016-10-14 <br> Updated: `r Sys.Date()`"
+output: github_document
+---
+
+```{r load_packages, message=FALSE}
+# Load packages and functions
+library(tidyverse)
+library(forcats)
+library(gmodels)
+library(caret)
+
+# devtools::install_github("mbcann01/dataclean")
+library(myFunctions)
+```
+
+merged_screening_recode.RData was created in preprocess_for_analysis.Rmd
+
+```{r load_data}
+# Load data
+merged_sr <- read_rds("/Users/bradcannell/Desktop/merged_screening_recode.RData")
+about_data(merged_sr) # 67 observations and 138 variables in the data 
+```
+
+-------------------------------------------------------------------------------
+
+# Exploritory Analysis
+
+## Figure 1. Count of [allegations](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_1340.asp#APS_1340) by allegation type.
+
+```{r}
+merged_sr %>% 
+  mutate(allegation = allegation %>% fct_infreq() %>% fct_rev()) %>% # Reorder by frequency - small to large
+  ggplot(aes(allegation)) +
+    geom_bar(stat = "count", fill = "Navy") +
+    geom_label(stat = "count", aes(label = ..count..)) +
+    scale_y_continuous("Count") +
+    scale_x_discrete("Allegation Type")
+```
+
+**Note:** In some cases there is more than one allegation per APS investigation.
+
+-------------------------------------------------------------------------------
+
+&nbsp;
+
+## Figure 2. Count of [perpetrators](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_1330.asp#APS_1330) by type.
+
+```{r}
+merged_sr %>% 
+  mutate(perp = perp %>% fct_infreq() %>% fct_rev()) %>% # Reorder by frequency - small to large
+  ggplot(aes(perp)) +
+    geom_bar(stat = "count", fill = "Navy") +
+    geom_label(stat = "count", aes(label = ..count..)) +
+    scale_y_continuous("Count") +
+    scale_x_discrete("Perpetrator")
+```
+
+**Note:** In some cases there is more than one allegation per APS investigation. APS identifies a perpetrator for each allegation. Therefore, a single APS investigation may have both perpetrator types.
+
+-------------------------------------------------------------------------------
+
+&nbsp;
+
+## Figure 3. Count of [closure reasons](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2800.asp#APS_2900) by type.
+
+```{r}
+merged_sr %>% 
+  filter(obs == 1) %>% # There is only one closure reason per APS investigation
+  mutate(closure_reason = closure_reason %>% fct_infreq() %>% fct_rev()) %>% # Reorder by frequency - small to large
+  ggplot(aes(closure_reason)) +
+    geom_bar(stat = "count", fill = "Navy") +
+    geom_label(stat = "count", aes(label = ..count..)) +
+  theme(axis.text.x = element_text(size = 7, angle = 60, hjust = 1)) +
+    scale_y_continuous("Count") +
+    scale_x_discrete("Closure Reason")
+```
+
+**Note:** There is only one closure reason per APS investigation. The closure reason is constant across allegations within each investigation.
+
+-------------------------------------------------------------------------------
+
+&nbsp;
+
+## Figure 4. Count of [dispositions](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2700.asp#APS_2700) by type.
+
+```{r}
+merged_sr %>% 
+  mutate(disposition = disposition %>% fct_infreq() %>% fct_rev()) %>% # Reorder by frequency - small to large
+  ggplot(aes(disposition)) +
+    geom_bar(stat = "count", fill = "Navy") +
+    geom_label(stat = "count", aes(label = ..count..)) +
+    scale_y_continuous("Count") +
+    scale_x_discrete("Disposition")
+```
+
+**Note:** In some cases there is more than one allegation per APS investigation. Each allegation has a disposition. It is not uncommon for there to be a mixture of validated and invalidated allegations within a single APS investigation.
+
+-------------------------------------------------------------------------------
+
+&nbsp;
+
+## Table 1. Statistical summary of age.
+
+```{r}
+merged_sr %>% 
+  filter(obs == 1) %>% 
+  select(age) %>% 
+  summary()
+```
+
+-------------------------------------------------------------------------------
+
+&nbsp;
+
+## Table 2. Statistical summary of time between MedStar response and APS intake (in days)
+
+```{r}
+merged_sr %>% 
+  filter(obs == 1) %>% 
+  mutate(
+    time = time_diff %>% as.character() %>% as.numeric()
+  ) %>% 
+  select(time) %>% 
+  summary()
+```
+
+-------------------------------------------------------------------------------
+
+&nbsp;
+
+## Figure 5. Frequency of any validated outcome per investigation (not allegation)   
+
+```{r}
+merged_sr %>% 
+  filter(obs == 1) %>%
+  mutate(any_valid_f = any_valid_f %>% fct_infreq() %>% fct_rev()) %>%
+  ggplot(aes(any_valid_f)) +
+    geom_bar(stat = "count", fill = "Navy") +
+    geom_label(stat = "count", aes(label = ..count..)) +
+    scale_y_continuous("Count") +
+    scale_x_discrete("Any Validated Allegation")
+```
+
+-------------------------------------------------------------------------------
+
+&nbsp;
+
+#### Session Info:
+```{r session_info, echo=FALSE}
+sessionInfo()
+```

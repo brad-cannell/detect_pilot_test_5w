@@ -1,0 +1,187 @@
+---
+title: "Preprocess merged data for analysis"
+date: "`r Sys.Date()`"
+output: 
+  html_notebook:
+    toc: true
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+    css: custom-css.css
+---
+
+-------------------------------------------------------------------------------
+
+```{r load_packages, message=FALSE}
+# Load packages and functions
+# CRAN packages
+library(tidyverse)
+
+# devtools::install_github("mbcann01/dataclean")
+library(dataclean) 
+# Use this instead of str() to prevent showing raw data values
+```
+
+```{r load_data}
+# Load data
+merged <- read_rds("/Users/bradcannell/Desktop/merged.RData")
+about_data(merged) # 67 observations and 35 variables in the data 
+```
+
+-------------------------------------------------------------------------------
+
+# Preprocess data for analysis    
+
+Because it is possible for there to be more than one allegation associated with each APS investigation, some people have more than one row in the data. It is also possible to have more than one instance of the DETECT screening tool used (response number) per APS investigation (case number).
+
+We want a single outcome per investigation/response combination (group) in order to create a confusion matrix for each screening item.
+
+To do that, we will create a new variable called "any_valid" that is equal to 1 if the disposition of _any_ allegation was valid, and 0 if the disposition of _all_ allegations were invalid. 
+
+1. Create new outcome variable (any_valid) that is equal to 1 when any type of abuse is validated for a given response group (case number / response date). For response groups with multiple dispositions:   
+  + If even one disposition is valid, then any valid equals 1   
+  + If all dispositions are invalid, then any valid equals 0   
+  + If all dispositions are other, then any valid equals NA
+  + If one disposition is other, and the rest are invalid, then any valid equals NA
+
+```{r data_manipulation}
+merged <- merged %>%
+  # Create temp variable to find any_valid by response group
+  mutate(
+    temp = case_when(
+      .$disposition == "Valid"   ~ 1,
+      .$disposition == "Invalid" ~ 0,
+      TRUE                       ~ 0.5
+    )
+  ) %>%
+  
+  # Group data by response group
+  group_by(group) %>%
+  
+  # Find max value of temp within group
+  mutate(
+    obs         = row_number(),
+    any_valid   = max(temp, na.rm = TRUE),
+    any_valid   = if_else(any_valid == 0.5, NA_real_, any_valid),
+    temp        = NULL # Drop temp
+  ) %>%
+  
+  # Ungroup data
+  ungroup %>%
+  
+  # Create a factor version of any_valid
+  mutate(
+    any_valid_f = factor(any_valid, labels = c("No", "Yes"))
+  )
+cat("Done")
+```
+
+2. We will recode "Not applicable or No Caregiver" to NA. The only variable that contained this response was no_talk51. This response was given 3 times.
+
+```{r not_applicable_na}
+merged <- merged %>%
+  map(
+    .f = function(x) {
+      if ("Not applicable or No Caregiver" %in% levels(x)) {
+        # Recode to NA
+        x[x == "Not applicable or No Caregiver"] <- NA
+        # Drop not applicable as a level
+        x <- factor(x, levels = c("Don’t Know", "No", "Yes"))
+        return(x)
+      } else {
+        return(x)
+      }
+    }
+  ) %>% 
+  as_tibble
+cat("Done")
+```
+
+3. We will handle "Don't Know" responses to screening questions by creating three versions of the data. In one version we will change "Don't Know" to NA. In the second version Don’t Know will be grouped with Yes, and in the third version Don’t Know will be grouped with No. We will conduct sensitivity analyses to investigate the effects of Don’t Know coding on the predictive performance of each screening item.
+
+```{r}
+# Grab variable names
+screening_items <- select(merged, unusual_odor36:adls61) %>% names()
+
+# Create function that takes a single vector (x) input with "Don't Know" values and recodes them to new_value
+# Does not create a new variable. That will be in the next function
+recode_dk_one <- function(x, new_value) {
+  v = factor(
+    if_else(
+      x == "Don’t Know", 
+      new_value, 
+      as.character(x)
+    )
+  )
+  v
+}
+
+# Create a function to iterate recode_dk_one over multiple variables and create new var as combination of old var name and recode value
+new_var_recode_dk <- function(old_var, df, new_value, suffix) {
+  for (col in old_var) {
+    # Create new var as combination of old var name and recode value
+    new_var_name <- paste0(col, suffix)
+  
+    # Add new_var_name to data frame and assign the results of recode_dk_one to new_var_name
+    df[[new_var_name]] <- recode_dk_one(x = df[[col]], new_value = new_value)
+  }
+  df
+}
+cat("Done")
+```
+
+### Add new variable in merged for each screening item that contains the values of the screening items with don't know recoded to NA.
+
+```{r}
+merged <- new_var_recode_dk(old_var = screening_items, df = merged, new_value = NA_character_, suffix = "_na")
+cat("Done")
+```
+
+### Add new variable in merged for each screening item that contains the values of the screening items with don't know recoded to Yes
+
+```{r}
+merged <- new_var_recode_dk(old_var = screening_items, df = merged, new_value = "Yes", suffix = "_yes")
+cat("Done")
+```
+
+### Add new variable in merged for each screening item that contains the values of the screening items with don't know recoded to No
+
+```{r}
+merged <- new_var_recode_dk(old_var = screening_items, df = merged, new_value = "No", suffix = "_no")
+cat("Done")
+```
+
+```{r}
+# Clean up
+rm(screening_items, new_var_recode_dk, recode_dk_one)
+about_data(merged) # 67 observations and 116 variables in the data 
+```
+
+How many were part of the compliance data?
+
+```{r}
+# Are all 8 of the compliance cases still in the data?
+merged$aps_report_num %>% unique() %>% length() # The 8 reports and NA 
+``` 
+
+# Save
+
+```{r save}
+merged_screening_recode <- merged
+write_rds(merged_screening_recode, path = "/Users/bradcannell/Desktop/merged_screening_recode.RData")
+cat("Done")
+```
+
+-------------------------------------------------------------------------------
+
+# Limitations
+
+We can’t investigate item performance by allegation, perpetrator, or death because of sample size.
+
+-------------------------------------------------------------------------------
+
+#### Session Info:
+```{r session_info, echo=FALSE}
+sessionInfo()
+```

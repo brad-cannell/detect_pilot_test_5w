@@ -1,0 +1,995 @@
+---
+title: "Feasibility Analysis"
+date: "Created: 2017-07-18 <br> Updated: `r Sys.Date()`"
+output: github_document
+---
+
+## Table of Contents {#toc}
+
+This analysis is focused on evaluating aspects of feasibility related to the DETECT pilot study. Specificially, we want to address the following questions:
+
+1. [What was the total number of 911 calls to people who were 65 and older between 2015-09-17 and 2015-10-27 (inclusive)?](#total-911-responses-and-screenings)
+
+2. [What was the impact of the screening validation in the MedStar ePCR?](#validation-rule)
+
+3. [How many medics used DETECT?](#how-many-medics-used-detect)
+
+4. [Given that the DETECT tool has 26 questions (a lot for a screener), what were the mean and median numbers of screening items completed when a screening was done?](#number-of-screening-items-completed)
+
+5. [When medics select yes to the ADL screening item, how often is that the only item they select yes on?](#adl-question)
+
+6. [When yes was checked for any item, how often was a report made?](#when-yes-was-checked-for-any-item-how-often-was-a-report-made)
+
+```{r load_packages, message=FALSE}
+# Load packages
+library(tidyverse)
+library(feather)
+library(stringr)
+```
+
+## Load data
+
+medstar_detect_demo.feather was created in data_clean_medstar.Rmd    
+medstar_detect.feather was created in data_clean_medstar.Rmd   
+merged_screening_recode.RData was created in preprocess_for_analysis.Rmd   
+
+```{r}
+medstar_dd <- read_feather("/Users/bradcannell/Desktop/medstar_detect_demo.feather")
+medstar_d  <- read_feather("/Users/bradcannell/Desktop/medstar_detect.feather")
+merged_sr  <- read_rds("/Users/bradcannell/Desktop/merged_screening_recode.RData")
+```
+
+## Data management
+
+There were no screenings done after 2015-10-26. Response data from 2015-10-27 needs to be filtered out.
+
+Also add a factor variable indicating if the validation rule was implemented or not.
+
+```{r}
+medstar_dd <- medstar_dd %>% 
+  mutate(
+    date = as.Date(date_entered),
+    validation = factor(if_else(date < "2015-09-28", "No", "Yes"))
+  ) %>% 
+  filter(date < "2015-10-27")
+```
+
+### Calculate the number of responses/names by date
+
+```{r}
+calls_by_date <- medstar_dd %>% 
+  group_by(incident_call_number, first_name) %>% 
+  mutate(incident_row = row_number()) %>% 
+  filter(incident_row == 1) %>%  # Keep one row per person / incident combo*
+  ungroup() %>% 
+  mutate(date = as.Date(date_entered)) %>% 
+  group_by(date) %>% 
+  summarise(responses = n()) %>% 
+  mutate(cum_response = cumsum(responses))
+```
+
+### Calculate the number of screenings/names by date.
+
+```{r}
+screening_by_date <- medstar_d %>% 
+  group_by(response_num, first_name) %>% 
+  mutate(response_row = row_number()) %>% 
+  ungroup() %>% 
+  group_by(response_date) %>% 
+  summarise(screenings = n()) %>% 
+  mutate(cum_screening = cumsum(screenings))
+```
+
+### Merge the responses per day data with the screenings per day data.
+
+```{r}
+screening_by_date$response_date <- as.Date(screening_by_date$response_date)
+merged_by_date <- calls_by_date %>% left_join(screening_by_date, by = c("date" = "response_date"))
+merged_by_date <- replace_na(merged_by_date, list(screenings = 0, cum_screening = 0))
+merged_by_date <- mutate(merged_by_date, validation = factor(if_else(date < "2015-09-28", "No", "Yes")))
+```
+
+### Create a "long" version of merged by date
+
+```{r}
+merged_by_date_long <- merged_by_date %>% 
+  select(date, responses, screenings, validation) %>% 
+  gather(type, count, - date, - validation)
+```
+
+### Create a data set with one row for each unique combination of response and medic.
+
+```{r}
+responses_medics <- medstar_dd %>% 
+  group_by(incident_call_number, first_name, crew_member_id) %>% 
+  mutate(response_medic_id = row_number()) %>% 
+  ungroup() %>% 
+  filter(response_medic_id == 1) #4141
+```
+
+### Create a data set that records whether each screening item was answered or not
+
+```{r}
+answers <- medstar_d %>% 
+  select(unusual_odor36:adls61) %>% 
+  mutate_all(
+    funs(
+      answered = if_else(is.na(.), 0L, 1L) # 1 if any answer - even "Don't Know", 0 if NA
+    )
+  ) %>% 
+  select(ends_with("answered")) %>% 
+  mutate(
+    number_answered = rowSums(.) # Count the number of responses across columns 
+  )
+
+dates <- select(medstar_d, response_date) # Add the dates back in
+
+answers <- bind_cols(dates, answers) %>% mutate(date = as.Date(response_date))
+
+answers <- mutate(answers, validation = factor(if_else(date < "2015-09-28", "No", "Yes"))) # Create validation
+```
+
+### Create a data set that records whether each screening item was answered yes or not for all 26 items, and for the final 17 items.
+
+```{r}
+yes_responses <- medstar_d %>% 
+  select(unusual_odor36:adls61) %>% 
+  mutate_all(
+    funs(
+      yes = case_when(. == "Yes" ~ 1L, TRUE ~ 0L) # 1 if Yes, 0 if anything else - including NA
+    )
+  ) 
+
+yes_responses <- yes_responses%>% 
+  mutate(
+    row_count_26 = rowSums(select(yes_responses, ends_with("yes"))),
+    any_yes_26   = if_else(row_count_26 > 0, 1L, 0L),
+    row_count_17 = rowSums(
+      select(yes_responses, unusual_odor36_yes, no_utils37_yes, hoarding38_yes, safe_env39_yes, 
+             cg_lack_know41_yes, cg_unengaged42_yes, cg_frustrated43_yes, cg_overwhelmed44_yes, 
+             cg_too_conerned45_yes, socsup50_yes, isolated52_yes, emo_distress56_yes, poor_hygiene57_yes,
+             clothing58_yes, taking_meds59_yes, saving_meds60_yes, adls61_yes
+      )
+    ),
+    any_yes_17 = if_else(row_count_17 > 0, 1L, 0L)
+  )
+
+id_date_name <- medstar_d %>% select(response_num, response_date, first_name)
+
+yes_responses <- bind_cols(id_date_name, yes_responses)
+```
+
+### Merge yes reponses with reports to APS
+
+```{r}
+reported_to_aps <- merged_sr %>% 
+  select(response_num, first_name) %>% 
+  group_by(response_num, first_name) %>% 
+  mutate(count = row_number()) %>% 
+  filter(count == 1) %>% # Keep only one row for each response/name
+  ungroup() %>% 
+  mutate(
+    response_num = response_num %>% as.character(),
+    count = NULL,
+    reported = 1
+  )
+
+yes_responses_and_reports_to_aps <- yes_responses %>% 
+  left_join(reported_to_aps, by = c("response_num", "first_name")) %>% 
+  mutate(reported = if_else(is.na(reported), 0, reported))
+```
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+## Total 911 responses and screenings
+
+-------------------------------------------------------------------------------
+
+[TOC](#table-of-contents)
+
+### What was the total number of 911 calls to people who were 65 and older between 2015-09-17 and 2015-10-26 (inclusive)?
+
+```{r}
+medstar_dd %>% 
+  mutate(person = paste(first_name, last_name, age, sep = "_")) %>% 
+  group_by(incident_call_number, first_name) %>% 
+  mutate(incident_names = paste(incident_call_number, first_name, sep = "_")) %>% 
+  ungroup() %>% 
+  summarise(
+    `Total Rows` = n() %>% format(big.mark = ","),
+    `Unique Incidents` = unique(incident_call_number) %>% length() %>% format(big.mark = ","),
+    `Unique PCR` = unique(incident_pcr_number) %>% length() %>% format(big.mark = ","),
+    `Unique Incident And Name` = unique(incident_names) %>% length() %>% format(big.mark = ","),
+    `Unique People` = unique(person) %>% length() %>% format(big.mark = ",")
+  )
+```
+
+After filtering out responses from 2015-10-27, the combined MedStar data contains 96,827 total rows of data that correspond to 1,964 911 responses, 1,970 PCR numbers, **1,967 unique response/name combinations**, and 1,736 unique people (assuming first name, last name, and age uniquely identifies people in this data).
+
+Spoke with MedStar on 2017-07-27. There are two reasons for multiple PCR numbers for a given incident number.
+
+First, if there is more than one person treated at a given incident, they each get a unique PCR number.
+
+Second, it could be an error caused by the chart being reopened to add more data. That appears to have happened some in our data. 
+
+When thinking about linking information in this data with screening information, the combination of incident call number and first name will be our unique identifier of interest.
+
+```{r}
+ggplot(data = calls_by_date, aes(x = date, y = responses)) +
+  geom_point() +
+  geom_line() +
+  geom_text(aes(label = responses), vjust = -0.5) +
+  annotate(
+    "label",
+    x = as.Date("2015-10-24"),
+    y = 20,
+    label = paste("Total =", format(max(calls_by_date$cum_response), big.mark = ","))
+  ) +
+  annotate(
+    "label",
+    x = as.Date("2015-09-22"),
+    y = 80,
+    label = paste("Earliest Date =", min(calls_by_date$date))
+  ) +
+  annotate(
+    "label",
+    x = as.Date("2015-10-22"),
+    y = 80,
+    label = paste("Latest Date =", max(calls_by_date$date))
+  ) +
+  scale_y_continuous(limits = c(0, 100)) +
+  scale_x_date(date_minor_breaks = "1 day") +
+  theme_bw()
+```
+
+### What is the age distribution of the people in the MedStar demographics and health data?
+
+```{r}
+summary(medstar_dd$age) # 65 to 101
+```
+
+### What was the overall proportion of older adults screened?
+
+Calculate the number of screenings per day.
+
+```{r}
+screening_by_date %>% summarise(`Total Screenings` = max(cum_screening))
+```
+
+1,247 screenings completed out of 1,967 qualified responses.
+
+```{r}
+(1247 / 1967) * 100
+```
+
+### Summary of all 911 responses
+
+Between 2015-09-17 and 2015-10-26, MedStar responded to 1,967 911 calls for people age 65+ at their residence. Those 1,967 responses resulted in 1,247 (63%) DETECT screenings.
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+## Validation rule
+
+-------------------------------------------------------------------------------
+
+[TOC](#table-of-contents)
+
+What was the impact of the screening validation in the MedStar ePCR?
+
+Initially, MedStar elected to implement the DETECT screening questions as an optional module in their ePCR. However, approximately 10 days after beginning the pilot study, they decided to add a validation rule to the ePCR. If the patient was 65 or older, and at their residence, the ePCR would validate that the DETECT screening tool was completed. If a medic selected “don’t know” for every screening item, this would satisfy the validation rule.
+
+Below we merge the calls_by_date data with the screenings_by_date data, and investigate the impact of the validation rule on reporting.
+
+### On what date was validation added?
+
+```{r}
+ggplot(data = merged_by_date, aes(x = date, y = screenings)) +
+  geom_point() +
+  geom_line() +
+  geom_text(aes(label = screenings), vjust = -0.5) +
+  annotate(
+    "label",
+    x = as.Date("2015-10-24"),
+    y = 30,
+    label = paste("Total =", format(max(merged_by_date$cum_screening), big.mark = ","))
+  ) +
+  annotate(
+    "label",
+    x = as.Date("2015-09-23"),
+    y = 20,
+    label = "Validation Start" 
+  ) +
+  scale_x_date(date_minor_breaks = "1 day") +
+  theme_bw()
+```
+
+It looks like the there's a big jump on September 28. According the Richard, this is where the validation rule was added.
+
+Below we plot this data again, using different colors to indicate pre- and post-validation.
+
+```{r}
+ggplot(data = merged_by_date, aes(x = date, y = screenings)) +
+  geom_point(aes(color = validation)) +
+  geom_line(aes(color = validation)) +
+  geom_text(aes(label = screenings), vjust = -0.5) +
+  annotate(
+    "label",
+    x = as.Date("2015-10-24"),
+    y = 30,
+    label = paste("Total =", format(max(merged_by_date$cum_screening), big.mark = ","))
+  ) +
+  annotate(
+    "label",
+    x = as.Date("2015-09-23"),
+    y = 22,
+    label = "Validation Start" 
+  ) +
+  scale_x_date(date_minor_breaks = "1 day") +
+  theme_bw()
+```
+
+Finally, we plot the data a third time, overlaying the total number of 911 responses for adults aged 65 and older in their residence.
+
+```{r}
+ggplot(data = merged_by_date, aes(x = date, y = screenings)) +
+  geom_point(aes(color = validation)) +
+  geom_point(aes(y = responses), alpha = 0.4) +
+  geom_line(aes(y = responses), alpha = 0.4) +
+  geom_line(aes(color = validation)) +
+  annotate(
+    "label",
+    x = as.Date("2015-09-22"),
+    y = 12,
+    label = "No Validation" 
+  ) +
+  annotate(
+    "label",
+    x = as.Date("2015-10-17"),
+    y = 27,
+    label = "Validation" 
+  ) +
+  scale_x_date(date_minor_breaks = "1 day") +
+  theme_bw()
+```
+
+#### Publication friendly version of the same chart
+
+```{r}
+fig_responses_screenings <- ggplot(merged_by_date_long, aes(x = date, y = count)) +
+  geom_line(aes(group = type, linetype = type, alpha = type)) +
+  geom_point(aes(group = type, alpha = type)) +
+  annotate(
+    "label",
+    x = as.Date("2015-09-22"),
+    y = 20,
+    label = "No Validation" 
+  ) +
+  annotate(
+    "label",
+    x = as.Date("2015-10-03"),
+    y = 20,
+    label = "Validation" 
+  ) +
+  geom_vline(aes(xintercept = as.numeric(as.Date("2015-09-28"))), alpha = 0.3, linetype = 3) +
+  scale_x_date("Date", date_minor_breaks = "1 day") +
+  scale_y_continuous("Number of Responses/Screenings") +
+  scale_linetype_manual("Line Legend", values = c("longdash", "solid"), 
+                        labels = c("Qualified 911 Responses", "DETECT Screenings")) +
+  scale_alpha_discrete("Line Legend", range = c(0.4, 1.0), 
+                       labels = c("Qualified 911 Responses", "DETECT Screenings")) +
+  theme_classic() +
+  theme(
+    legend.position = c(0.8, 0.2),
+    legend.background = element_rect(color = "black")
+  ) 
+
+fig_responses_screenings
+```
+
+#### Save as a jpg
+
+```{r}
+ggsave("fig_responses_screenings.jpeg", fig_responses_screenings, device = "jpeg", width = 7, height = 4)
+```
+
+### Screenings Overall
+
+```{r}
+merged_by_date %>% 
+  summarize(
+    `Total Responses` = max(cum_response), 
+    `Total Screenings` = max(cum_screening),
+    `Percent Screened` = round((`Total Screenings` / `Total Responses`) * 100, 1)
+  )
+```
+
+### Before the validation 
+
+Before September 28, how many calls were run for people 65 and above in their residence?    
+Before September 28, at how many of those calls was the detect tool used?   
+
+```{r}
+merged_by_date %>% 
+  filter(validation == "No") %>% 
+  summarize(
+    `Total Responses` = max(cum_response), 
+    `Total Screenings` = max(cum_screening),
+    `Percent Screened` = round((`Total Screenings` / `Total Responses`) * 100, 1)
+  )
+```
+
+### After the validation
+
+Between September 28 and October 26, how many calls were run for people 65 and above in their residence?    
+Between September 28 and October 26, at how many of those calls was the detect tool used?
+
+```{r}
+merged_by_date %>% 
+  filter(validation == "Yes") %>% 
+  mutate(
+    cum_response = cumsum(responses),
+    cum_screening = cumsum(screenings)
+  ) %>% 
+  summarize(
+    `Total Responses` = max(cum_response), 
+    `Total Screenings` = max(cum_screening),
+    `Percent Screened` = round((`Total Screenings` / `Total Responses`) * 100, 1)
+  )
+```
+
+
+### Validation summary
+
+Before the validation rule was put in place, there were 548 total calls that met the DETECT screening criteria (aged 65 or older, in residence). Those 548 calls resulted in 25 (4.6%) DETECT screenings. After the validation rule was put in place, MedStar medics responded to another 1,416 total calls that met the DETECT screening criteria. Those 1,416 calls resulted in 1,220 (86.2%) DETECT screenings.
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+## How many medics used DETECT
+
+-------------------------------------------------------------------------------
+
+[TOC](#table-of-contents)
+
+How many total medics went out on a qualified call - regardless of screening.
+
+```{r}
+medstar_dd %>% summarise(`Unique Medics` = crew_member_id %>% unique() %>% length()) # 258
+```
+
+Make sure there are still 1,247 unique screenings
+
+```{r}
+medstar_dd %>% 
+  group_by(incident_call_number, first_name) %>% # There are responses with a screening for two different people
+  mutate(incident_name_id = row_number()) %>% # 1 to r for each combination of incident number and first name
+  ungroup() %>% 
+  filter(incident_name_id == 1) %>% # 1 row per incident number and name
+  group_by(detect_data) %>% 
+  summarise(n())
+```
+
+So, there are still 1,247 unique DETECT screening tool uses in the data.
+
+### Overall number and percent of medics who used DETECT
+
+```{r}
+responses_medics %>% 
+  mutate(total_unique_medics = crew_member_id %>% unique() %>% length()) %>% 
+  filter(detect_data == 1) %>% 
+  mutate(screening_unique_medics = crew_member_id %>% unique() %>% length()) %>% 
+  summarize(
+    `Total Medics` = max(total_unique_medics), 
+    `Total Medics That Screened` = max(screening_unique_medics),
+    `Percent Screened` = round((`Total Medics That Screened` / `Total Medics`) * 100, 1)
+  )
+```
+
+### Before the validation 
+
+Before September 28, how many medics responded to calls for people 65 and above in their residence?    
+Before September 28, at how many of those calls was the detect tool used?
+
+```{r}
+responses_medics %>% 
+  filter(validation == "No") %>% 
+  mutate(total_unique_medics = crew_member_id %>% unique() %>% length()) %>% 
+  filter(detect_data == 1) %>% 
+  mutate(screening_unique_medics = crew_member_id %>% unique() %>% length()) %>% 
+  summarize(
+    `Total Medics` = max(total_unique_medics), 
+    `Total Medics That Screened` = max(screening_unique_medics),
+    `Percent Screened` = round((`Total Medics That Screened` / `Total Medics`) * 100, 1)
+  )
+```
+
+### After the validation
+
+Between September 28 and October 26, how many medics responded to calls for people 65 and above in their residence?      
+Between September 28 and October 26, at how many of those calls was the detect tool used?
+
+```{r}
+responses_medics %>% 
+  filter(validation == "Yes") %>% 
+  mutate(total_unique_medics = crew_member_id %>% unique() %>% length()) %>% 
+  filter(detect_data == 1) %>% 
+  mutate(screening_unique_medics = crew_member_id %>% unique() %>% length()) %>% 
+  summarize(
+    `Total Medics` = max(total_unique_medics), 
+    `Total Medics That Screened` = max(screening_unique_medics),
+    `Percent Screened` = round((`Total Medics That Screened` / `Total Medics`) * 100, 1)
+  )
+```
+
+### Medic usage summary
+
+Before the validation rule was put in place, 43 of the 225 medics (19%) that responded to a qualified call completed a DETECT screening. After the validation rule was put in place, 251 of the 255 medics that responded to a qualified call completed a DETECT screening.
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+## Number of screening items completed
+
+-------------------------------------------------------------------------------
+
+[TOC](#table-of-contents)
+
+Given that the DETECT tool has 26 questions (a lot for a screener), what were the mean and median numbers of screening items completed when a screening was done?
+
+```{r}
+answers
+```
+
+Answers contains 1 row for each DETECT screening completed. For each screening item, there is a variable set to “1” if any response was given for that item on that instance, and “0” if it was missing.
+
+### Screenings by validation
+
+Just a quick reminder. How many screenings were completed before and after the validation?
+
+```{r}
+answers %>% group_by(validation) %>% summarise(N = n()) %>% mutate(cumsum(N))
+```
+
+### Overall number of questions answered per screening
+
+How many questions were answered, on average, when at least one question was answered?
+
+```{r}
+answers %>% select(number_answered) %>% summary()
+```
+
+Now plotted as a histogram
+
+```{r}
+answers %>% select(number_answered) %>% 
+ggplot() + 
+  stat_bin(aes(x = number_answered, fill = ..density..), bins = 10) +
+  scale_x_continuous(breaks = seq(0, 26, 2)) +
+  theme_bw()
+```
+
+Now look at how many responses there were to each question.
+
+```{r}
+answer_counts <- answers %>% 
+  summarise_at(vars(unusual_odor36_answered:adls61_answered), funs(sum)) %>%
+  gather(question, n_answered) %>% 
+  mutate(
+    order = 1:length(question),
+    screenings = 1247,
+    percent_answered = (n_answered / screenings) * 100
+  )
+
+answer_counts %>% arrange(desc(n_answered))
+```
+
+```{r}
+ggplot(answer_counts, aes(x = order, y = percent_answered)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = seq(0, 26, 2)) +
+  scale_y_continuous(limits = c(0, 100)) +
+  theme_bw()
+```
+
+### Before the validation
+
+How many questions were answered, on average, when at least one question was answered?
+
+```{r}
+answers %>% filter(validation == "No") %>% select(number_answered) %>% summary()
+```
+
+Now plotted as a histogram
+
+```{r}
+answers %>% filter(validation == "No") %>% select(number_answered) %>% 
+ggplot() + 
+  stat_bin(aes(x = number_answered, fill = ..density..), bins = 10) +
+  scale_x_continuous(breaks = seq(0, 26, 2)) +
+  theme_bw()
+```
+
+Now look at how many responses there were to each question.
+
+```{r}
+screenings_no <- answers %>% filter(validation == "No") %>% summarise(N = n()) %>% unlist()
+
+answer_counts <- answers %>% 
+  filter(validation == "No") %>% 
+  summarise_at(vars(unusual_odor36_answered:adls61_answered), funs(sum)) %>%
+  gather(question, n_answered) %>% 
+  mutate(
+    order = 1:length(question),
+    screenings = screenings_no,
+    percent_answered = (n_answered / screenings) * 100
+  )
+
+answer_counts %>% arrange(desc(n_answered))
+```
+
+```{r}
+ggplot(answer_counts, aes(x = order, y = percent_answered)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = seq(0, 26, 2)) +
+  scale_y_continuous(limits = c(0, 100)) +
+  theme_bw()
+```
+
+
+### After the validation
+
+How many questions were answered, on average, when at least one question was answered?
+
+```{r}
+answers %>% filter(validation == "Yes") %>% select(number_answered) %>% summary()
+```
+
+Now plotted as a histogram
+
+```{r}
+answers %>% filter(validation == "Yes") %>% select(number_answered) %>% 
+ggplot() + 
+  stat_bin(aes(x = number_answered, fill = ..density..), bins = 10) +
+  scale_x_continuous(breaks = seq(0, 26, 2)) +
+  theme_bw()
+```
+
+Now look at how many responses there were to each question.
+
+```{r}
+screenings_yes <- answers %>% filter(validation == "Yes") %>% summarise(N = n()) %>% unlist()
+
+answer_counts <- answers %>% 
+  filter(validation == "Yes") %>% 
+  summarise_at(vars(unusual_odor36_answered:adls61_answered), funs(sum)) %>%
+  gather(question, n_answered) %>% 
+  mutate(
+    order = 1:length(question),
+    screenings = screenings_yes,
+    percent_answered = (n_answered / screenings) * 100
+  )
+
+answer_counts %>% arrange(desc(n_answered))
+```
+
+```{r}
+ggplot(answer_counts, aes(x = order, y = percent_answered)) +
+  geom_point() +
+  geom_line() +
+  scale_x_continuous(breaks = seq(0, 26, 2)) +
+  scale_y_continuous(limits = c(0, 100)) +
+  theme_bw()
+```
+
+### Percent of questions answered overall
+
+```{r}
+ggplot(answers, aes(x = number_answered)) +
+  stat_density()
+```
+
+```{r}
+answers %>% 
+  summarise(
+    mean = mean(number_answered),
+    median = median(number_answered)
+  )
+```
+
+The distribution of number of questions answered is bimodal. Limits the usefulness of the mean and median. Instead calculate the percent who answered less than 5, 10, 20 or more, and 26.
+
+```{r}
+answers %>% 
+  summarise(
+    five_less = sum(number_answered <= 5) / nrow(answers) * 100,
+    ten_less = sum(number_answered <= 10) / nrow(answers) * 100,
+    mean_less = sum(number_answered <= 16) / nrow(answers) * 100,
+    mean_more = sum(number_answered >= 16) / nrow(answers) * 100,
+    twenty_more = sum(number_answered >= 20) / nrow(answers) * 100,
+    twenty_six = sum(number_answered == 26) / nrow(answers) * 100
+  )
+```
+
+### Percent of questions answered when there was an APS investigation
+
+Get response numbers for screenings that were reported to APS.
+
+```{r}
+reported <- merged_sr %>% pull(response_num) %>% unique()
+```
+
+Filter answers to include on the reported cases.
+
+```{r}
+response_num <- select(medstar_d, response_num) # Add the response numbers back in
+
+answers <- bind_cols(response_num, answers)
+
+answers <- answers %>% filter(response_num %in% reported)
+```
+
+```{r}
+ggplot(answers, aes(x = number_answered)) +
+  stat_density()
+```
+
+```{r}
+answers %>% 
+  summarise(
+    mean = mean(number_answered),
+    median = median(number_answered)
+  )
+```
+
+The distribution of number of questions answered is bimodal. Limits the usefulness of the mean and median. Instead calculate the percent who answered less than 5, 10, 20 or more, and 26.
+
+```{r}
+answers %>% 
+  summarise(
+    five_less = sum(number_answered <= 5) / nrow(answers) * 100,
+    ten_less = sum(number_answered <= 10) / nrow(answers) * 100,
+    mean_less = sum(number_answered <= 16) / nrow(answers) * 100,
+    mean_more = sum(number_answered >= 16) / nrow(answers) * 100,
+    twenty_more = sum(number_answered >= 20) / nrow(answers) * 100,
+    twenty_six = sum(number_answered == 26) / nrow(answers) * 100
+  )
+```
+
+### Summary of questions answered
+
+Before the validation, the median number of screening items completed was 25. After the validation, the median number of screening items completed was 26.
+
+Before the validation, 25 total screenings were completed. The most often completed screening item was completed on 96% of the screenings. The least often completed screening item was completed on 56% of the screenings.
+
+After the validation, 1,220 total screenings were completed. The most often completed screening item was completed on 100% of the screenings. The least often completed screening item was completed on 54% of the screenings.
+
+Figure X shows that after 5 questions, there is a large drop in the percentage of questions answered. This may suggest that 5 or fewer questions is optimum for maximizing screening item response.
+
+The number of screening items that medics completed when using the DETECT screener had a bimodal distribution. Roughly 42% of the time medics completed 5 or fewer screening items. Conversely, 53% of the time medics completed all 26 screening items.
+
+There was a similar pattern observed among the screenings that resulted in a report to APS. Roughly 33% completed 5 or fewer items, while 59% completed all 26 items.
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+## ADL question
+
+-------------------------------------------------------------------------------
+
+[TOC](#table-of-contents)
+
+"Need assistance with eating, toileting, transferring, dressing, or bathing," would seem to apply to many of the community-dwelling older adult patients whom EMS providers may encounter who aren't mistreatment victims. Is the item intended to imply that the patient is not receiving the needed assistance from a caregiver? Does an EMS provider need to have suspicion of mistreatment in addition to one or more positive screening items?
+
+### ADLs yes
+
+Over all completed screenings, what was the distribution of responses to the ADL question?
+
+```{r}
+medstar_d %>% 
+  group_by(adls61) %>% 
+  summarise(N = n()) %>% 
+  mutate(
+    cumsum(N),
+    percent = N / max(cumsum(N)) * 100
+  )
+```
+
+### Selected alone vs. with other
+
+```{r}
+adl_yes <- medstar_d %>% 
+  filter(adls61 == "Yes") %>% 
+  select(unusual_odor36:adls61) %>% 
+  mutate_all(
+    funs(
+      if_else(. == "Yes", 1L, 0L)
+    )
+  ) %>% 
+  transmute(
+    number_answered = rowSums(., na.rm = TRUE),
+    more_than_adl = number_answered > 1
+  )
+```
+
+
+When medics selected yes to the ADL question, how often was it the only item selected?
+
+```{r}
+adl_yes %>% 
+  group_by(more_than_adl) %>% 
+  summarise(N = n()) %>% 
+  mutate(
+    cumsum(N),
+    Percent = N / max(cumsum(N)) * 100
+  )
+```
+
+On 62% of the screenings where yes was selected for the ADL question, yes was selected for at least one other question. 
+
+### ADLs when reports were made
+
+Get response numbers for screenings that were reported to APS.
+
+```{r}
+reported <- merged_sr %>% pull(response_num) %>% unique()
+```
+
+Tag reported rows in the screening data.
+
+```{r}
+medstar_d %>% 
+  mutate(reported_to_aps = response_num %in% reported) %>% 
+  group_by(reported_to_aps, adls61) %>% 
+  summarise(N = n()) %>% 
+  mutate(
+    cumsum(N),
+    percent = N / max(cumsum(N)) * 100
+  )
+```
+
+Among the screenings that resulted in a report to APS, yes was selected for the ADL screening item 20% of the time. Among the screenings that did not result in a report to APS, yes was selected for the ADL screening item 4% of the time.
+
+```{r}
+medstar_d %>% 
+  filter(adls61 == "Yes") %>% 
+  bind_cols(adl_yes) %>% 
+  mutate(reported_to_aps = response_num %in% reported) %>% 
+  group_by(reported_to_aps, more_than_adl) %>% 
+  summarise(N = n()) %>% 
+  mutate(
+    cumsum(N),
+    percent = N / max(cumsum(N)) * 100
+  )
+```
+
+### ADL summary
+
+Over all 1,247 completed screenings, a yes response was selected for the ADL question 61 times (4.9%).
+
+Among the 61 screenings that included a yes response for the ADL question, 38 (62.3%) also included a yes response to at least one other screening item.
+
+Among the screenings that resulted in a report to APS, yes was selected for the ADL screening item 20% of the time. Among the screenings that did not result in a report to APS, yes was selected for the ADL screening item 4% of the time.
+
+In a little over half the cases (56%) when the medic selected yes to the ADL item and a report to APS wasn't made, the medic also selected yes to at least one other question. In all cases when the medic selected yes to the ADL item and a report was made to APS, the medic also selected yes to at least one other question.
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+## When yes was checked for any item how often was a report made
+
+-------------------------------------------------------------------------------
+
+[TOC](#table-of-contents)
+
+### Out of all 26 items
+
+```{r}
+yes_responses_and_reports_to_aps %>% 
+  summarise(
+    `Total Screenings` = nrow(.),
+    `Screenings with Yes` = sum(any_yes_26),
+    `Total Reports` = sum(reported),
+    `Percent Yes Reported Possible` = ((`Total Reports` / `Screenings with Yes`) * 100) %>% round(1),
+    `Percent Yes Reported At Least` = ((16 / `Screenings with Yes`) * 100) %>% round(1)
+  )
+```
+
+There were 46 total reports to APS. However, we don't know that our medics made those reports. If those were all made by MedStar, then a report was made 22% of the time that at least one item was checked yes. If the 16 reports that compliance knew about were the only reports made, then a report was made 8% of the time that at least one item was checked yes.
+
+### Out of the 17 final items
+
+```{r}
+yes_responses_and_reports_to_aps %>% 
+  summarise(
+    `Total Screenings` = nrow(.),
+    `Screenings with Yes` = sum(any_yes_17),
+    `Total Reports` = sum(reported),
+    `Percent Yes Reported Possible` = ((`Total Reports` / `Screenings with Yes`) * 100) %>% round(1),
+    `Percent Yes Reported At Least` = ((16 / `Screenings with Yes`) * 100) %>% round(1)
+  )
+```
+
+There were 46 total reports to APS. However, we don't know that our medics made those reports. If those were all made by MedStar, then a report was made 24% of the time that at least one of the final 17 items was checked yes. If the 16 reports that compliance knew about were the only reports made, then a report was made 8% of the time that at least one of the final 17 items was checked yes.
+
+---
+
+```{r echo=FALSE}
+sessionInfo()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
