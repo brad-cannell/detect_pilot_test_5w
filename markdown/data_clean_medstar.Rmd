@@ -1,9 +1,7 @@
 ---
 title: "Data Clean MedStar Data"
 date: "Created: 2016-09-09 <br> Updated: `r Sys.Date()`"
-output: 
-  html_notebook:
-    css: detect_pilot_css.css
+output: html_notebook
 ---
 
 # Overview
