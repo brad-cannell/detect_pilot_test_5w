@@ -42,7 +42,7 @@ For more information about our analysis process and results, please click in the
 
 ## Data cleaning code
 
-[Process used to clean data from MedStar]()
+[Process used to clean data from MedStar](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/data_clean_medstar.nb.html)
 
 * Data from MedStar that contains all uses of the DETECT screening tool
 
