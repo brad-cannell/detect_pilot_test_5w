@@ -1,19 +1,14 @@
 ---
 title: "Data Clean MedStar Data"
 date: "Created: 2016-09-09 <br> Updated: `r Sys.Date()`"
-output: html_notebook
+output: 
+  html_notebook:
+    css: custom-css.css
 ---
-
-<style>
-  hr {
-    background-color: #66b3ff;
-    height: 1px;
-  }
-</style>
 
 # Overview
 
-In this file, we do general preprocessing of the raw MedStar data.
+In this file, we do general cleaning of the raw MedStar data.
 
 Specifically:
 
