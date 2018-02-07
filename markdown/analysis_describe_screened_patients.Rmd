@@ -1,0 +1,81 @@
+---
+title: "Descriptive Analysis of MedStar Data"
+date: "Created: 2018-02-07 <br> Updated: `r Sys.Date()`"
+output: 
+  html_notebook:
+    css: custom-css.css
+---
+
+# Overview
+
+The purpose of this analysis is just to describe the sample of older adults who were screened by MedStar using the DETECT tool during the phase 1 pilot test.
+
+In this analysis, we start with the **medstar_detect_demo** data, which was created in **data_clean_medstar.Rmd**. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+Sys.setenv(TZ = "US/Central")
+```
+
+```{r load_packages, message=FALSE}
+library(tidyverse)
+library(feather)
+library(bfuncs)
+```
+
+```{r}
+medstar_detect_demo <- read_feather("/Users/bradcannell/Desktop/medstar_detect_demo.feather")
+about_data(medstar_detect_demo) # 99,309 observations and 56 variables
+```
+
+# Keep records from older adults that were screened only
+
+```{r}
+screened_only <- medstar_detect_demo %>% 
+  filter(detect_data == 1)
+
+about_data(screened_only) # 64,059 observations and 56 variables
+```
+
+Each row in this data is not a unique person. For the purposes of this analysis, we just want to describe the characteristics of unique people. Therefore, we will assume that first name, last name, and age uniquely identify people. Then, we will keep only the first instance of each.
+
+```{r}
+screened_agr <- screened_only %>% 
+  mutate(person = paste(first_name, last_name, age, sep = "_")) %>%
+  group_by(person) %>% 
+  mutate(person_row = row_number()) %>% 
+  filter(person_row == 1) %>% # 1,141 matches data from data_clean_medstar.Rmd
+  ungroup() %>% 
+  select(age, gender, race)
+
+about_data(screened_agr) # 1,141 observations and 3 variables
+```
+
+# Calculate some basic descriptives
+
+```{r}
+screened_agr %>% 
+  mean_table(age)
+```
+
+```{r}
+screened_agr %>% 
+  group_by(gender) %>% 
+  freq_table()
+```
+
+```{r}
+screened_agr %>% 
+  group_by(race) %>% 
+  filter( !(race %in% c("Not Available", "Not Documented")) ) %>% 
+  freq_table()
+```
+
+
+&nbsp;
+
+-------------------------------------------------------------------------------
+
+```{r echo=FALSE}
+sessionInfo()
+```
