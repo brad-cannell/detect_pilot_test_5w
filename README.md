@@ -22,10 +22,6 @@ MedStar successfully integrated the DETECT screening questions into its ePCR and
 
 EMS providers encounter older adults who are living with EA. Identification of EA cases by medics is facilitated by incorporation of the DETECT tool into the ePCR and may enhance medics’ efforts for early detection of  EA in community dwelling older adults.
 
-## Wiki
-
-For more information about the DETECT project, you can view the Wiki page here: [DETECT Pilot Test Wiki](https://github.com/mbcann01/detect_pilot_test/wiki)
-
 
 
 
