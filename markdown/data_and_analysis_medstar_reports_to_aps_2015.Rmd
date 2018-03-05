@@ -470,7 +470,7 @@ Remove identifiers from the APS reporting data we received from MedStar's legal 
 * As part of the process of protecting participant anonymity, we will remove the day from all dates.
 
 ```{r}
-medstar_aps_deidentified <- medstar_aps %>%
+medstar_compliance_deidentified <- medstar_aps %>%
   select(created, reported, electronic, phone, detect_pilot) %>% 
   mutate(
     created  = format(created, "%Y-%m"),
@@ -486,8 +486,14 @@ medstar_aps_deidentified <- medstar_aps %>%
 * Save a second copy in CSV format for NACJD.
 
 ```{r}
-feather::write_feather(medstar_aps_deidentified, "../data/medstar_aps_deidentified.feather")
-readr::write_csv(medstar_aps_deidentified, "../data/medstar_aps_deidentified.csv")
+feather::write_feather(
+  medstar_compliance_deidentified, 
+  "../data/medstar_compliance_deidentified.feather"
+)
+readr::write_csv(
+  medstar_compliance_deidentified,
+  "../data/medstar_compliance_deidentified.csv"
+)
 ```
 
 [top](#top)
