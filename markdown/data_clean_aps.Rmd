@@ -3,25 +3,68 @@ title: "Cleaning APS Data for Analysis"
 date: "Created: 2017-01-22 <br> Updated: `r Sys.Date()`"
 output: 
   html_notebook:
-    css: detect_pilot_css.css
+    css: custom-css.css
 ---
 
-```{r setup, echo = FALSE}
-Sys.setenv(TZ = "US/Central")
-knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
-```
+# Overview
 
--------------------------------------------------------------------------------
+The DETECT screening tool was pilot tested between 2015-09-17 and 2015-10-26. On 2016-08-31 APS securely transmitted data containing records of all elder abuse and neglect investigations conducted in MedStar's service area between 2015-09-17 and 2015-11-05. Specifically, the name of the data set received from APS is:
+
+* APS In-Home Intakes of Clients Age 65 or Over in Denton Johnson or Tarrant Counties.xlsx
+
+Below we clean this data and prepare it for further analysis.
+
+# Key variable definitions 
+
+* **Case number definition**
+
+    - APS case / investigation number.
+
+* **Intake stage definition**
+
+    - An ID number assigned to the Intake. Each Intake (Report to APS) has its own number. A case may have more than one intake. For example, on the first tab of the spreadsheet, you can see that case # XXXXXX has two intakes associated with it, 9 days apart, each with their own ID number. On the second tab of the spreadsheet, which provides allegations associated with each intake, you can see that each of the two intakes associated with this case have multiple allegations.
+
+* **Intake start definition**
+
+    - An intake is the submission or receipt of a report of abuse - a phone call or web-based. The Intake Start Date refers to the date the staff member opens a new record to begin recording the report. In the case of a phone call they have picked up from a caller on the abuse hotline, the intake starts when the Intake worker begins to speak to the individual, open the record and begin recording what they are hearing. In the case of reports made using the web-based system, intake begins when the Intake worker pulls the web-report and begins processing it in the system. There is the possibility that the intake may begin on one day but not end until the next day.
+
+# Table of contents
+
+1. [Import APS client info data](#client-info)      
+2. [Import APS allegations data](#allegations)    
+3. [Import APS Closure Reason](#closure)      
+4. [Import APS allegation disposition data](#disposition)     
+5. [Save data for merge with screening data](#save)     
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+Sys.setenv(TZ = "US/Central")
+```
 
 ```{r load_packages, message=FALSE}
 library(tidyverse)
 library(readxl)
 library(lubridate)
 library(stringr)
-library(bfuncs) # devtools::install_github("brad-cannell/bfuncs")
+library(bfuncs)
 ```
 
-# Import APS data (Client Info)   
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Import APS client info data {#client-info}   
+
+-------------------------------------------------------------------------------
+
+The client info data contains patient identifiers.
 
 ```{r import_client_info}
 col_info <- c( 
@@ -51,39 +94,63 @@ client_data <- read_excel(
   skip = 6)
 
 rm(col_info, path)
+
+about_data(client_data) # 747 observations and 13 variables
 ```
 
 ## Check for duplicate rows by case number
 
 ```{r}
-sum(duplicated(client_data$case_num)) # 68
+client_data %>% 
+  group_by(case_num) %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n) # 58
 ```
 
 ## Check for duplicate rows by case number and intake_stage
 
 ```{r}
-dups <- paste0(client_data$case_num, client_data$intake_stage)
-sum(duplicated(dups)) # None
+client_data %>% 
+  group_by(case_num, intake_stage) %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n) # 0
 ```
 
-# Check dates
+## Check dates
 
 ```{r}
 min(client_data$intake_start)
-max(client_data$intake_start)
-# 2015-09-17 to 2015-11-05
+max(client_data$intake_start) # 2015-09-17 to 2015-11-05
 ```
 
-```{}
+```{r}
 about_data(client_data)
-rm(dups)
 ```
 
-#### 747 observations and 13 variables in the data
+There are **747 observations and 13 variables** in the APS client info data.
+
+[top](#top)
+
+
+
+
+
+
+
+
+
 
 -------------------------------------------------------------------------------
 
-# Import APS data ([Allegations](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_1340.asp#APS_1340))   
+# Import APS [allegations](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_1340.asp#APS_1340) data {#allegations}
+
+-------------------------------------------------------------------------------
+
+The allegations data contains information about the allegation type(s) for each case and the perpetrator (self/other) for each allegation.
 
 ```{r import_allegations}
 col_info <- c( 
@@ -92,12 +159,8 @@ col_info <- c(
   "intake_stage", "text",
   "allegation",   "text",
   "perp",         "text",
-  "perp_id",      "text",
-  "ghost1",       "blank",
-  "ghost2",       "blank",
-  "ghost3",       "blank",
-  "ghost4",       "blank",
-  "ghost5",       "blank")
+  "perp_id",      "text"
+)
 
 # Import data
 allegations <- read_excel(
@@ -107,59 +170,129 @@ allegations <- read_excel(
   col_types = col_info[seq(2, length(col_info), 2)],
   skip = 6)
 
-# Check for duplicate rows by case number
-sum(duplicated(allegations$case_num)) 
-# 408 (816)
+rm(col_info)
 
-# Check for duplicate rows by case number and intake stage
-dups <- paste0(allegations$case_num, allegations$intake_stage)
-sum(duplicated(dups))
-# 340 (680)
-
-# Check for duplicate rows by case number, intake stage, and allegation
-dups <- paste0(allegations$case_num, allegations$intake_stage, allegations$allegation)
-sum(duplicated(dups)) 
-# 90 (180)
-
-# Check for duplicate rows by case number, intake stage, allegation, and perp
-dups <- paste0(allegations$case_num, allegations$intake_stage, allegations$allegation, allegations$perp)
-sum(duplicated(dups)) 
-# 36 (72)
-
-# Check for duplicate rows by all vars
-sum(duplicated(allegations)) 
-# None
-
-# Manually check the 72 from the step above
-dups <- paste0(allegations$case_num, allegations$intake_stage, allegations$allegation, allegations$perp)
-index <- which(duplicated(dups))
-
-# At this point, perp_id isn't meaningful in the absence of other differences between rows. Therefore, I'm going to drop rows that differ only by perp_id.
-allegations <- allegations[-index, ]
-
-about_data(allegations)
-rm(col_info, dups, index)
+about_data(allegations) # 1,087 observations and 5 variables
 ```
 
-#### 1,051 observations and 5 variables in the data
+
+## Sort data by case number and intake stage
+
+```{r}
+allegations <- allegations %>% 
+  arrange(case_num, intake_stage)
+```
+
+
+## Check for duplicate rows by case number
+
+```{r}
+allegations %>% 
+  group_by(case_num) %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n)
+```
+
+There are 245 case numbers that appear in the data 2 or more times.
+
+
+## Check for duplicate rows by case number and intake stage
+
+```{r}
+allegations %>% 
+  group_by(case_num, intake_stage) %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n)
+```
+
+There are 237 combinations of case number and intake stage that appear in the data 2 or more times. This happens when multiple allegations are mode at a single report (intake stage) for a case. Some cases have more than one reporter.
+
+
+## Check for duplicate rows by case number, intake stage, and allegation
+
+```{r}
+allegations %>% 
+  group_by(case_num, intake_stage, allegation) %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n)
+```
+
+There are 80 combinations of case number, intake stage, and allegation that appear in the data 2 or more times. This happens when there is more than one type of perpetrator for a single allegation, within a single report (intake stage) for a case.
+
+
+## Check for duplicate rows by case number, intake stage, allegation, and perp
+
+```{r}
+allegations %>% 
+  group_by(case_num, intake_stage, allegation, perp) %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n)
+```
+
+There are 32 combinations of case number, intake stage, allegation, and perpetrator that appear in the data 2 or more times. This happens when there is more than one perpetrator of the same type (But different perpetrator ID's) for a single allegation, within a single report (intake stage) for a case.
+
+
+## Check for duplicate rows by all variables
+
+```{r}
+allegations %>% 
+  group_by_all() %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n)
+```
+
+There are no complete duplicate rows.  
+
+At this point, perp_id isn't meaningful in the absence of other differences between rows. Therefore, I'm going to drop rows that differ only by perp_id.
+
+```{r}
+allegations <- allegations %>% 
+  group_by(case_num, intake_stage, allegation, perp) %>% 
+  mutate(
+    count = row_number(), # Counts rows by group
+    dup   = count > 1     # TRUE if there is more than one row per group
+  ) %>% 
+  filter(!dup) %>% 
+  select(case_num:perp)
+
+about_data(allegations)
+```
+
+There are **1,051 observations and 4 variables** in the APS allegations data.
+
+[top](#top)
+
+
+
+
+
+
+
+
+
 
 -------------------------------------------------------------------------------
 
-# Import APS data ([Closure Reason](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2800.asp#APS_2900))   
+# Import APS [closure reason](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2800.asp#APS_2900) data {#closure} 
+
+-------------------------------------------------------------------------------
 
 ```{r import_closure_reason}
 col_info <- c( 
 # "col_name",       "col_type"
   "case_num",       "text",
   "intake_stage",   "text",
-  "closure_reason", "text",
-  "ghost1",         "blank",
-  "ghost2",         "blank",
-  "ghost3",         "blank",
-  "ghost4",         "blank",
-  "ghost5",         "blank",
-  "ghost6",         "blank",
-  "ghost7",         "blank")
+  "closure_reason", "text")
 
 # Import data
 closure <- read_excel(
@@ -169,24 +302,56 @@ closure <- read_excel(
   col_types = col_info[seq(2, length(col_info), 2)],
   skip = 7)
 
-# Check for duplicate rows by case number
-sum(duplicated(closure$case_num)) 
-# 68 (136)
-
-# Check for duplicate rows by case number and intake stage
-dups <- paste0(closure$case_num, closure$intake_stage)
-sum(duplicated(dups)) 
-# 0
+rm(col_info)
 
 about_data(closure)
-rm(col_info, dups)
 ```
 
-#### 747 observations and 3 variables in the data
+
+## Check for duplicate rows by case number
+```{r}
+closure %>% 
+  group_by(case_num) %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n) # 58
+```
+
+
+## Check for duplicate rows by case number and intake stage
+
+```{r}
+closure %>% 
+  group_by(case_num, intake_stage) %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n) # 0
+```
+
+```{r}
+about_data(closure)
+```
+
+There are **747 observations and 3 variables** in the APS closure reason data
+
+[top](#top)
+
+
+
+
+
+
+
+
+
 
 -------------------------------------------------------------------------------
 
-# Import APS data ([Allegation Disposition](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2700.asp#APS_2700)   
+# Import APS [allegation disposition](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2700.asp#APS_2700) data {#disposition}   
+
+-------------------------------------------------------------------------------
 
 ```{r import_allegation_disposition}
 col_info <- c( 
@@ -195,12 +360,7 @@ col_info <- c(
   "allegation",  "text",
   "perp",        "text",
   "perp_id",     "text",
-  "disposition", "text",
-  "ghost1",      "blank",
-  "ghost2",      "blank",
-  "ghost3",      "blank",
-  "ghost4",      "blank",
-  "ghost5",      "blank")
+  "disposition", "text")
 
 # Import data
 disposition <- read_excel(
@@ -210,63 +370,123 @@ disposition <- read_excel(
   col_types = col_info[seq(2, length(col_info), 2)],
   skip = 6)
 
-# Drop final row - was a note in the excel sheet
-row <- nrow(disposition)
-disposition <- disposition[-row,]
+rm(col_info)
 
-# Check for duplicate rows by case number
-sum(duplicated(disposition$case_num)) 
-# 455 (910)
+about_data(disposition) # 1,135 observations and 5 variables
+```
 
-# Check for duplicate rows by case number and allegation
-dups <- paste0(disposition$case_num, disposition$allegation)
-sum(duplicated(dups)) 
-# 140 (280)
 
-# Check for duplicate rows by case number, allegation, and perp
-dups <- paste0(disposition$case_num, disposition$allegation, disposition$perp)
-sum(duplicated(dups)) 
-# 62 (124)
+## Drop final row - was a note in the excel sheet
 
-# Check for duplicate rows by case number, allegation, perp, and perp id
-dups <- paste0(disposition$case_num, disposition$allegation, disposition$perp, disposition$perp_id)
-sum(duplicated(dups)) 
-# 6 (12)
+```{r}
+disposition <- disposition %>% slice(-n())
+```
 
-# Check for duplicate rows by all vars
-sum(duplicated(disposition)) 
-# 6 (12)
 
-# Manually check the 12 duplicate rows
-dups <- paste0(disposition$case_num, disposition$allegation, disposition$perp, disposition$perp_id)
-index <- which(duplicated(dups))
+## Check for duplicate rows by case number
 
-# Truly duplicates. Drop
-disposition <- disposition[-index, ]
+```{r}
+disposition %>% 
+  group_by(case_num) %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n) # 276
+```
+
+
+## Check for duplicate rows by case number and allegation
+
+```{r}
+disposition %>% 
+  group_by(case_num, allegation) %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n) # 118
+```
+
+
+## Check for duplicate rows by case number, allegation, and perp
+
+```{r}
+disposition %>% 
+  group_by(case_num, allegation, perp) %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n) # 53
+```
+
+
+## Check for duplicate rows by case number, allegation, perp, and perp id
+
+```{r}
+disposition %>% 
+  group_by(case_num, allegation, perp, perp_id) %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n) # 6
+```
+
+
+## Check for duplicate rows by all variables
+
+```{r}
+disposition %>% 
+  group_by_all() %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n) # 6 (12 rows)
+```
+
+After manually checking the 12 duplicate rows, they appear to truly be complete duplicates. I will keep one row from each set of duplicates.
+
+```{r}
+disposition <- disposition %>% 
+  group_by_all() %>% 
+  mutate(
+    count = row_number(), # Counts rows by group
+    dup   = count > 1     # TRUE if there is more than one row per group
+  ) %>% 
+  filter(!dup) %>% 
+  select(case_num:disposition)
 
 about_data(disposition)
-rm(col_info, row, dups, index)
 ```
 
-#### 1,128 observations and 5 variables in the data
+There are **1,128 observations and 5 variables** in the APS disposition data.
 
-```{r save_to_desktop, echo=FALSE}
-save(client_data, file = "/Users/bradcannell/Desktop/client_data.RData")
-save(allegations, file = "/Users/bradcannell/Desktop/allegations.RData")
-save(closure, file = "/Users/bradcannell/Desktop/closure.RData")
-save(disposition, file = "/Users/bradcannell/Desktop/disposition.RData")
-```
+[top](#top)
+
+
+
+
+
+
+
+
+
 
 -------------------------------------------------------------------------------
 
-#### Session Info:
-```{r session_info, echo=FALSE}
-sessionInfo()
+# Save data for merge with screening data {#save}
+
+-------------------------------------------------------------------------------
+
+```{r}
+feather::write_feather(client_data, "/Users/bradcannell/Desktop/client_data.feather")
+feather::write_feather(allegations, "/Users/bradcannell/Desktop/allegations.feather")
+feather::write_feather(closure, "/Users/bradcannell/Desktop/closure.feather")
+feather::write_feather(disposition, "/Users/bradcannell/Desktop/disposition.feather")
 ```
 
-```{r export, echo=FALSE, eval=FALSE}
-# Keeping around just in case
-medstar$dob2 <- as.Date(medstar$dob)
-write_csv(medstar, "/Users/bradcannell/Desktop/medstar.csv")
+[top](#top)
+
+
+```{r session_info, echo=FALSE}
+sessionInfo()
 ```
 

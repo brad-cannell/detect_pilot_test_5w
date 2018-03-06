@@ -16,6 +16,16 @@ Specifically:
 
 2. **DETECT-Patient-Data_2017-07-19_144931** - Data from MedStar that includes demographic and health information for all patients who where age >= 65 and treated during the pilot period.
 
+# Key variable definitions 
+
+* **Response number definition**
+
+    - From MedStar: There is incident and response number. Incident is one incident. Response is unique to patient/truck.
+
+* **Response date definition**
+
+    - Day that MedStar ran the 911 call and filled out the DETECT screening tool.
+
 # Table of contents
 
 1. [Import and clean DETECT screening data](#detect-data)     
@@ -227,11 +237,8 @@ So, the MedStar detect screening data contains 1,247 total rows of data that cor
 ## Remove identifiers and save
 
 ```{r}
-medstar_detect_nid <- select(medstar_detect,
-  age:adls61, detect_data
-)
-
-write_feather(medstar_detect_nid, "../data/medstar_detect_nid.feather")
+# medstar_detect_deidentified <- select(medstar_detect, age:adls61, detect_data)
+# write_feather(medstar_detect_deidentified, "../data/medstar_detect_deidentified.feather")
 ```
 
 ```{r echo=FALSE}
