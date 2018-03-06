@@ -29,8 +29,14 @@ Specifically:
 # Table of contents
 
 1. [Import and clean DETECT screening data](#detect-data)     
-2. [Import and clean demographics and health data](#demographic-data)   
+2. [Import and clean demographics and health data](#demographic-data)    
 3. [Merge the screening data with the demographics and health data](#merge)    
+4. [Save data for merge with APS data](#save)     
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+Sys.setenv(TZ = "US/Central")
+```
 
 ```{r load_packages, message=FALSE}
 library(tidyverse)
@@ -113,20 +119,38 @@ about_data(medstar_detect) # 1,248 observations and 36 variables in the data
 First, check for entire duplicate rows
 
 ```{r}
-# medstar_detect %>% filter(duplicated(.) | duplicated(., fromLast = TRUE)) # 2 rows
+medstar_detect %>% 
+  group_by_all() %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n)
 ```
 
 151003... Appears to have a duplicate row. Will drop.
 
 ```{r}
-medstar_detect <- medstar_detect %>% filter(!duplicated(.))
+medstar_detect <- medstar_detect %>% 
+  group_by_all() %>% 
+  mutate(
+    count = row_number(), # Counts rows by group
+    dup   = count > 1     # TRUE if there is more than one row per group
+  ) %>% 
+  filter(!dup) %>% 
+  select(-count, -dup)
+
+about_data(medstar_detect) # 1,247 observations and 36 variables
 ```
 
 Next, check for duplicate response numbers
 
 ```{r}
-# medstar_detect %>%
-  # filter(duplicated(response_num) | duplicated(response_num, fromLast = TRUE)) # 4 rows
+medstar_detect %>% 
+  group_by(response_num) %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n) # 2 sets of duplicates (4 rows)
 ```
 
 151011... Includes information about two people. A man and a woman with the same last name. Both over age 65. Keep both rows because they are not duplicates of each other. They are two separate screenings that occurred at a single 911 response.
@@ -181,7 +205,7 @@ medstar_detect <- medstar_detect %>%
 
 Check to see if all the response id's from the MedStar compliance data exist in the current data.   
 
-```{r}
+```{r eval=FALSE}
 # These response id's are from the data sent to me by MedStar compliance
 # load("/Users/bradcannell/Desktop/response_ids.RData")
 
@@ -197,7 +221,7 @@ Check to see if all the response id's from the MedStar compliance data exist in 
 # match_ids <- dplyr::intersect(ri, rn)
 # save(match_ids, file = "/Users/bradcannell/Desktop/match_ids.RData")
 
-#clean up
+# clean up
 # rm(response_ids, match_ids, no_match, ri, rn)
 ```
 
@@ -233,20 +257,7 @@ medstar_detect %>%
 
 So, the MedStar detect screening data contains 1,247 total rows of data that correspond to 1,245 911 responses, 1,247 unique response/name combinations, and 1,141 unique people (assuming first name, last name, and age uniquely identifies people in this data).
 
-
-## Remove identifiers and save
-
-```{r}
-# medstar_detect_deidentified <- select(medstar_detect, age:adls61, detect_data)
-# write_feather(medstar_detect_deidentified, "../data/medstar_detect_deidentified.feather")
-```
-
-```{r echo=FALSE}
-# Save copy with identifiers
-# Encrypt
-# Securely store
-write_feather(medstar_detect, "/Users/bradcannell/Desktop/medstar_detect.feather")
-```
+[top](#top)
 
 
 
@@ -262,8 +273,6 @@ write_feather(medstar_detect, "/Users/bradcannell/Desktop/medstar_detect.feather
 # Import MedStar data containing the patient demographic and health information {#demographic-data}
 
 -------------------------------------------------------------------------------
-
-[top](#top)
 
 ```{r}
 col_info <- c( 
@@ -309,50 +318,40 @@ medstar_demo <- medstar_demo %>% mutate(first_name = str_extract(first_name, "^\
 First, check for rows that are entirely duplicated
 
 ```{r}
-sum(duplicated(medstar_demo)) # 413 rows that are duplicates across all variables
-```
-
-```{r}
-sum(duplicated(medstar_demo) | duplicated(medstar_demo, fromLast = TRUE))
-```
-
-Not 426 because some combinations of values are duplicated in more than one row. For example:
-
-```{r}
-# example <- tibble(
-#   id = c(1, 1, 2, 2, 2),
-#   x1 = c(1, 1, 1, 1, 1)
-# )
-# 
-# example %>%
-#   mutate(
-#     dup1 = duplicated(.),
-#     dup2 = duplicated(.) | duplicated(., fromLast = TRUE)
-#   ) %>% 
-#   summarise(sum(dup1), sum(dup2)) # 5, not 6
-```
-
-Print out and check duplicate rows
-
-```{r}
-# dup_check <- medstar_demo
-# # which(duplicated(dup_check) | duplicated(dup_check, fromLast = TRUE))
-# dup_check$dup[duplicated(dup_check) | duplicated(dup_check, fromLast = TRUE)] <- 1
-# dup_check %>% filter(dup == 1) %>% arrange(incident_call_number, crew_member_id, medical_surgery_hist, current_meds)
-# rm(dup_check)
+order_all_cols <- names(medstar_demo) %>% rlang::syms()
+medstar_demo %>% 
+  arrange(!!!order_all_cols) %>% 
+  group_by_all() %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n) # 387 groups of duplicates
 ```
 
 I manually inspected the duplicate rows. They appear to be genuine duplicates. Below I will drop the duplicate rows.
 
 ```{r}
-medstar_demo <- distinct(medstar_demo)
+rm(order_all_cols)
+```
+
+```{r}
+medstar_demo <- medstar_demo %>% 
+  group_by_all() %>% 
+  mutate(
+    count = row_number(), # Counts rows by group
+    dup   = count > 1     # TRUE if there is more than one row per group
+  ) %>% 
+  ungroup() %>% 
+  filter(!dup) %>% 
+  select(-count, -dup)
+
 about_data(medstar_demo) # 99,311 observations and 16 variables
 ```
 
 
 ## Check for incident call numbers that correspond to more than one person
 
-```{r}
+```{r eval=FALSE}
 # Grab incident numbers where grouping by incident call number doesn't match grouping by incident call number and name.
 # no_match <- medstar_demo %>%
 #   group_by(incident_call_number) %>%
@@ -418,6 +417,8 @@ medstar_demo <- medstar_demo %>%
   as_tibble
 ```
 
+[top](#top)
+
 
 
 
@@ -454,7 +455,7 @@ Additionally, it also appears as though there are cases where there is a matchin
 
 See the example below.
 
-```{r}
+```{r eval=FALSE}
 # # Example
 # # df1 <- tibble(
 # #   id = c(1, 1, 1, 1, 2),
@@ -529,7 +530,7 @@ check_names %>%
 
 ## How many incident numbers in each data set match, but do not have matching first names?
 
-```{r}
+```{r eval=FALSE}
 # check_names %>%
 #   select(incident_call_number, first_name) %>%
 #   distinct() %>%                                              # Reduces to unique id/name combinations
@@ -559,7 +560,7 @@ Also did a manual double check of the data, and everything looks good.
 
 ## How many incident numbers in each data set match, but do not have matching last names?
 
-```{r}
+```{r eval=FALSE}
 # check_names %>%
 #   select(incident_call_number, last_name.x, last_name.y) %>%
 #   filter(last_name.x != last_name.y) %>%                       # Find non-matching pairs
@@ -603,32 +604,30 @@ about_data(medstar_detect_demo) # 99,309 observations and 57 variables
 ```{r}
 medstar_detect_demo$age.y <- NULL
 medstar_detect_demo <- rename(medstar_detect_demo, age = age.x)
+about_data(medstar_detect_demo) # 99,309 observations and 56 variables
 ```
 
 
-## Remove identifiers from combined data and save
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Save data for merge with APS data {#save}
+
+-------------------------------------------------------------------------------
 
 ```{r}
-medstar_detect_demo_nid <- select(medstar_detect_demo, 
-  age:drug_use, medical_surgery_hist:current_meds, unusual_odor36:adls61, detect_data
-)
-
-write_feather(medstar_detect_demo_nid, "../data/medstar_detect_demo_nid.feather")
-```
-
-```{r echo=FALSE}
-# Save copy with identifiers
-# Encrypt
-# Securely store
 write_feather(medstar_detect_demo, "/Users/bradcannell/Desktop/medstar_detect_demo.feather")
 ```
 
-```{r echo=FALSE, results='hide'}
-# Clean up
-rm(medstar_demo, medstar_detect, medstar_detect_demo, medstar_detect_demo_nid, medstar_detect_nid)
-```
+[top](#top)
 
----
 
 ```{r echo=FALSE}
 sessionInfo()
