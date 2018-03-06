@@ -623,6 +623,8 @@ about_data(medstar_detect_demo) # 99,309 observations and 56 variables
 -------------------------------------------------------------------------------
 
 ```{r}
+write_feather(medstar_detect, "/Users/bradcannell/Desktop/medstar_detect.feather")
+write_feather(medstar_demo, "/Users/bradcannell/Desktop/medstar_demo.feather")
 write_feather(medstar_detect_demo, "/Users/bradcannell/Desktop/medstar_detect_demo.feather")
 ```
 
