@@ -14,7 +14,7 @@ Specifically:
 
 1. **DETECT_DATA_PIVOT.xlsx** - Data from MedStar that contains all uses of the DETECT screening tool.   
 
-2. **DETECT-Patient-Data_2017-07-19_144931** - Data from MedStar that includes demographic and health information for all patients who where age >= 65 and treated during the pilot period.
+2. **DETECT-Patient-Data_2017-07-19_144931.xlsx** - Data from MedStar that includes demographic and health information for all patients who where age >= 65 and treated during the pilot period.
 
 # Key variable definitions 
 
