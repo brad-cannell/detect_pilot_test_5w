@@ -128,11 +128,6 @@ At this point, the medstar_aps data contains 49 observations and 7 variables. Al
 
 -------------------------------------------------------------------------------
 
-```{r}
-# medstar_aps_deidentified <- feather::read_feather("../data/medstar_aps_deidentified.feather")
-```
-
-
 ## Calculate time difference
 
 Here we calculate the difference in days between the variables reported (to APS) and created (recorded with MedStar compliance).
@@ -344,82 +339,87 @@ reports_merge <- reports_date %>%
 rows <- which(!is.na(reports_merge["count_month"]))
 ```
 
+
 ### Create breaks at each month for the x axis
 
 ```{r}
 mnth_breaks <- reports_merge$reported[rows]
 ```
 
+```{r}
+reports_merge %>% 
+  filter(!is.na(count_month)) %>% 
+  pull(reported)
+```
+
+
 
 ## Figure 2. MedStar reports to APS by month
 
 ```{r}
-ggplot(reports_merge) +
-  geom_rug(aes(x = reported), col = "blue") +
-  geom_point(aes(x = reported, y = count_month)) +
-  geom_line(aes(x = reported, y = count_month), data = reports_merge[rows,]) +
+fig_medstar_reports_to_aps_2015 <- ggplot() +
+  geom_rug(
+    aes(x = reported), 
+    data  = reports_merge, 
+    color = "blue"
+  ) +
+  geom_point(
+    aes(x = reported, y = count_month), 
+    data  = reports_merge %>% filter(!is.na(count_month)),
+    size  = 1
+  ) +
+  geom_line(
+    aes(x = reported, y = count_month),
+    data  = reports_merge %>% filter(!is.na(count_month)),
+    group = 1,
+    size  = 0.5
+  ) +
   geom_vline(
     xintercept = as.numeric(as.POSIXct("2015-09-17")),
-    col = "red", alpha = 0.5, linetype = 2
+    col      = "red", 
+    alpha    = 0.5, 
+    linetype = 2
   ) +
   geom_vline(
     xintercept = as.numeric(as.POSIXct("2015-10-27")),
-    col = "red", alpha = 0.5, linetype = 2
+    col      = "red", 
+    alpha    = 0.5, 
+    linetype = 2
   ) +
-  scale_y_continuous("Number of Reports to APS") +
-  scale_x_datetime("Month", breaks = mnth_breaks, labels = format(mnth_breaks, "%b")) +
+  scale_y_continuous(
+    name = "Number of Reports to APS"
+  ) +
+  scale_x_datetime(
+    name   = "Month", 
+    breaks = reports_merge %>% filter(!is.na(count_month)) %>% pull(reported), 
+    labels = format(mnth_breaks, "%b")
+  ) +
   theme_classic() +
   theme(
-    axis.title = element_text(size = 12),
-    axis.text = element_text(size = 12)
+    axis.title = element_text(size = 8),
+    axis.text  = element_text(size = 8)
   )
 
-# Size for export: 1778*1000
-
-# This will come back with the following warnings:
-# Removed 43 rows containing missing values (geom_point).  
-# This can be safely ignored. This is just because of all the days with NA for
-# count_month, which are supposed to be NA.
+fig_medstar_reports_to_aps_2015
 ```
 
 1. The red dashed lines indicate the time period in which the DETECT screening tool was used in MedStar's EPCR.   
 
 2. The blue rug plot shows the marginal distribution of individual reports to APS. 
 
-```{r figure2_export, warning=FALSE, include=FALSE}
-# This is the same figure as above. Some of the dimensions are changed so that it looks better when exported for inclusion in a document or slide show.
 
-# Size for export: 1778*1000
+## Save Figure 2 to file
 
-# Grab rows with values for count_month - need for geom_line
-rows <- which(!is.na(reports_merge["count_month"]))
-
-# Create breaks at each month for the x axis
-mnth_breaks <- reports_merge$reported[rows]
-
-ggplot(reports_merge) +
-  geom_rug(aes(x = reported), col = "blue", size = 1.5) +
-  geom_point(aes(x = reported, y = count_month), size = 2.5) +
-  geom_line(aes(x = reported, y = count_month), data = reports_merge[rows,], size = 1.5) +
-  geom_vline(
-    xintercept = as.numeric(as.POSIXct("2015-09-17")),
-    col = "red", alpha = 0.5, linetype = 2, size = 1.5
-  ) +
-  geom_vline(
-    xintercept = as.numeric(as.POSIXct("2015-10-27")),
-    col = "red", alpha = 0.5, linetype = 2, size = 1.5
-  ) +
-  scale_y_continuous("Number of Reports to APS") +
-  scale_x_datetime("Month", breaks = mnth_breaks, labels = format(mnth_breaks, "%b")) +
-  theme_bw() +
-  theme(
-    axis.title = element_text(size = 24),
-    axis.text = element_text(size = 20)
-  )
-# This will come back with the following warnings:
-# Removed 43 rows containing missing values (geom_point).  
-# This can be safely ignored. This is just because of all the days with NA for
-# count_month, which are supposed to be NA.
+```{r}
+ggsave(
+  filename = "../images/fig_medstar_reports_to_aps_2015.png",
+  plot     = fig_medstar_reports_to_aps_2015,
+  device = "png",
+  width = 11.43,
+  height = 6.858,
+  units = "cm",
+  dpi = 300
+)
 ```
 
 [top](#top)
