@@ -10,7 +10,7 @@ output:
 
 The DETECT screening tool was pilot tested between 2015-09-17 and 2015-10-26. On 2016-08-31 APS securely transmitted data containing records of all elder abuse and neglect investigations conducted in MedStar's service area between 2015-09-17 and 2015-11-05. Specifically, the name of the data set received from APS is:
 
-* APS In-Home Intakes of Clients Age 65 or Over in Denton Johnson or Tarrant Counties.xlsx
+* **APS In-Home Intakes of Clients Age 65 or Over in Denton Johnson or Tarrant Counties.xlsx** - This is the data that was sent to me by APS. It contains all the investigations conducted in MedStar's service area during the pilot study period.
 
 Below we clean this data and prepare it for further analysis.
 
