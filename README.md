@@ -43,7 +43,7 @@ For more information about our analysis process and results, please click in the
 
 [Process used to clean the APS Investigations data](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/data_clean_aps.nb.html)
 
-[Process used to Link records in the cleaned MedStar data with records in the cleaned APS data]()
+[Process used to Link records in the cleaned MedStar data with records in the cleaned APS data](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/data_merge_medstar_aps.nb.html)
 
 
 ## Analysis code
