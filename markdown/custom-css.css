@@ -9,3 +9,11 @@ hr {
   background-color: #66b3ff;
   height: 1px;
 }
+
+/* Style Block Quotes */
+blockquote {
+  font-size: 11pt;
+  font-style: italic;
+  border-left: 4px solid #66b3ff;
+  margin-left: 20pt;
+}
