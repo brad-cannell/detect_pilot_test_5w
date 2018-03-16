@@ -57,6 +57,8 @@ For more information about our analysis process and results, please click in the
 
 * Variable manipulation and recode missing.
 
+* Save deidentified versions of data    
+
 
 ## Analysis code
 
