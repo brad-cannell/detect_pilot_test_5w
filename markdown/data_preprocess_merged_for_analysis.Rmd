@@ -14,13 +14,19 @@ We start with the following data:
 
 1. **merged.feather** - MedStar DETECT screenings that were matched to APS investigations on name and date of birth. Data cleaned in data_merge_medstar_aps.Rmd
 
+2. **
+
 # Table of contents
 
 1. [Preprocess for analysis](#preprocess)     
     1. Create an **any_valid** variable            
-    2. Recode DETECT responses to NA     
+    2. Recode DETECT responses to NA    
     
-2. [Save preprocessed data](#save)       
+2. [Create a deidentified version of the merged data](#deidentify)    
+3. [Save preprocessed data](#save)      
+    1. merged_screening_recode.feather    
+    2. merged_screening_recode_deidentified.feather     
+    3. merged_screening_recode_deidentified.csv    
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(comment = NA)
@@ -107,6 +113,11 @@ about_data(merged_screening_recode) # 67 observations and 58 variables
 ```
 
 
+[top](#top)
+
+&nbsp;
+
+
 
 
 
@@ -117,14 +128,66 @@ about_data(merged_screening_recode) # 67 observations and 58 variables
 
 -------------------------------------------------------------------------------
 
-# Save merged data {#save}
+# Create a deidentified version of the merged data {#deidentify
 
 -------------------------------------------------------------------------------
 
 ```{r}
-feather::write_feather(merged_screening_recode, 
-                       path = "/Users/bradcannell/Desktop/merged_screening_recode.feather")
+merged_screening_recode_deidentified <- merged_screening_recode %>% 
+  select(pair, age, unusual_odor36:compliance_match, time_diff:perp, disposition:any_valid)
+
+about_data(merged_screening_recode_deidentified) # 67 observations and 35 variables
 ```
+
+[top](#top)
+
+&nbsp;
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Save preprocessed data {#save}
+
+-------------------------------------------------------------------------------
+
+* Merged data with "Don't Know" and "Not applicable or No Caregiver" recoded to NA
+
+```{r}
+feather::write_feather(
+  merged_screening_recode, 
+  path = "/Users/bradcannell/Desktop/merged_screening_recode.feather"
+)
+```
+
+* Merged data with "Don't Know" and "Not applicable or No Caregiver" recoded to NA and person-level identifiers removed from the data
+
+    - feather version for me
+    
+    - CSV version for upload to [NACJD](https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html)
+
+```{r}
+feather::write_feather(
+  merged_screening_recode_deidentified,
+  "../data/merged_screening_recode_deidentified.feather"
+)
+
+write_csv(
+  merged_screening_recode_deidentified,
+  "../data/merged_screening_recode_deidentified.csv"
+)
+```
+
+[top](#top)
+
+&nbsp;
 
 
 ```{r session_info, echo=FALSE}
