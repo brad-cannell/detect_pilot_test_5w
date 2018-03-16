@@ -20,7 +20,7 @@ MedStar successfully integrated the DETECT screening questions into its ePCR and
 
 ## Conclusions
 
-EMS providers encounter older adults who are living with EA. Identification of EA cases by medics is facilitated by incorporation of the DETECT tool into the ePCR and may enhance medics’ efforts for early detection of  EA in community dwelling older adults.
+EMS providers encounter older adults who are living with EA. Identification of EA cases by medics is facilitated by incorporation of the DETECT tool into the ePCR and may enhance medics’ efforts for early detection of EA in community dwelling older adults.
 
 
 # DETECT pilot data
@@ -43,7 +43,19 @@ For more information about our analysis process and results, please click in the
 
 [Process used to clean the APS Investigations data](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/data_clean_aps.nb.html)
 
+* Client information
+
+* [Abuse/Neglect Allegations](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_1340.asp#APS_1340)
+
+* [Investigation dispositions](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2700.asp#APS_2700)
+
+* [Investigation closure reasons](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2800.asp#APS_2900)
+
 [Process used to Link records in the cleaned MedStar data with records in the cleaned APS data](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/data_merge_medstar_aps.nb.html)
+
+[Processed used to preprocess merged data for analysis](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/data_preprocess_merged_for_analysis.nb.html)
+
+* Variable manipulation and recode missing.
 
 
 ## Analysis code
