@@ -784,7 +784,7 @@ In this context, duplicates are in terms of person and response date (date DETEC
 
 2. For any given screening in the MedStar data that was matched to multiple investigations (on the same person, of course) in the APS data, we keep the row with the shortest amount of time between screening and intake_start.
 
-3. When two rows differ only by intake stage, it means that there was one MedStar screening and one APS investigation, but the investigation was prompted by two or more separate reports. Therefore, one row is simply duplicate information, and retain both would essentially up weight the influence of that particular screening / outcome combination. Choosing the row to drop is arbitrary. For consistency, we will always drop the second row.
+3. When two rows differ only by intake stage, it means that there was one MedStar screening and one APS investigation, but the investigation was prompted by two or more separate reports. Therefore, one row is simply duplicate information, and retaining both would essentially up weight the influence of that particular screening / outcome combination. Choosing the row to drop is arbitrary. For consistency, we will always drop the second row.
 
 
 ## Application of the dropping rules in this data
