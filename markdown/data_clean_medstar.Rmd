@@ -8,30 +8,48 @@ output:
 
 # Overview
 
-In this file, we do general cleaning of the raw MedStar data.
+In this file, we import the raw data files received from MedStar and do some basic data checks.
 
-Specifically:
+Specifically we import the following two files:
 
 1. **DETECT_DATA_PIVOT.xlsx** - Data from MedStar that contains all uses of the DETECT screening tool.   
 
 2. **DETECT-Patient-Data_2017-07-19_144931.xlsx** - Data from MedStar that includes demographic and health information for all patients who where age >= 65 and treated during the pilot period.
 
+
 # Key variable definitions 
 
-* **Response number definition**
+It's important to understand the meaning of patient identification variables in the data, and the relationship between patient identification variables across both datasets. The following diagram shows how people are identified in the MedStar data:
 
-    - From MedStar: There is incident and response number. Incident is one incident. Response is unique to patient/truck.
+![](../images/medstar_detect_identifiers.png)
 
-* **Response date definition**
+However, after manually checking the datasets we found that the terms "Incident" and "Response" are used inconsistently between files. 
 
-    - Day that MedStar ran the 911 call and filled out the DETECT screening tool.
+* In **DETECT_DATA_PIVOT.xlsx**:
+
+    - **Response number** is unique to the incident/respnse (#2 in the diagram). In cases where there was more than one person screened at an incident/response, the response number is not unique to the person/screening (#3 and #4 in the diagram). This number matches response number in DETECT-Patient-Data_2017-07-19_144931.xlsx.
+    
+    - **Response date** is the date that MedStar ran the 911 call and filled out the DETECT screening tool.
+    
+* In **DETECT-Patient-Data_2017-07-19_144931.xlsx**:
+
+    - **Date entered** is the date that MedStar ran the 911 call and filled out the DETECT screening tool.
+    
+    - **Incident call number** is unique to the incident/respnse (#2 in the diagram). In cases where there was more than one person screened at an incident/response, the response number is not unique to the person/screening (#3 and #4 in the diagram). This number matches response number in DETECT_DATA_PIVOT.xlsx.
+    
+    - **Incident PCR number** is unique to the person/DETECT screening at a given incident/response. Below, we add this number to DETECT_DATA_PIVOT.xlsx. NOTE: No two people should have the same incident PCR number; however, a single person may have multiple incident PCR numbers if they were treated by MedStar on multiple occasions.
+    
+In order to be consistent and reduce confusion, after importing the data below, we will use the terminology from DETECT-Patient-Data_2017-07-19_144931.xlsx.
+
 
 # Table of contents
 
 1. [Import and clean DETECT screening data](#detect-data)     
 2. [Import and clean demographics and health data](#demographic-data)    
-3. [Merge the screening data with the demographics and health data](#merge)    
-4. [Save data for merge with APS data](#save)     
+3. [# Add incident PCR number to MedStar DETECT data](#add-pcr)     
+4. [Merge the screening data with the demographics and health data](#merge)    
+5. [Save data for merge with APS data](#save)    
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(comment = NA)
@@ -46,6 +64,8 @@ library(stringr)
 library(lubridate)
 library(bfuncs)
 ```
+
+&nbsp;
 
 
 
@@ -142,7 +162,7 @@ medstar_detect <- medstar_detect %>%
 about_data(medstar_detect) # 1,247 observations and 36 variables
 ```
 
-Next, check for duplicate response numbers
+## Check for duplicate response numbers
 
 ```{r}
 medstar_detect %>% 
@@ -205,29 +225,26 @@ medstar_detect <- medstar_detect %>%
 
 Check to see if all the response id's from the MedStar compliance data exist in the current data.   
 
-```{r eval=FALSE}
-# These response id's are from the data sent to me by MedStar compliance
-# load("/Users/bradcannell/Desktop/response_ids.RData")
-
-# Convert response_ids and medstar$response_num to atomic vectors
-# ri <- unlist(response_ids)
-# rn <- unlist(medstar_detect$response_num)
-
-# Check for rows that appear in ri, but not rn
-# no_match <- dplyr::setdiff(ri, rn)
-# length(no_match)
-
-# Save the 9 remaining id's
-# match_ids <- dplyr::intersect(ri, rn)
-# save(match_ids, file = "/Users/bradcannell/Desktop/match_ids.RData")
-
-# clean up
-# rm(response_ids, match_ids, no_match, ri, rn)
+```{r}
+response_ids <- feather::read_feather("/Users/bradcannell/Desktop/response_ids.feather")
 ```
 
-There are 7 responses id's in the MedStar compliance data that don't appear in the MedStar DETECT screening items data. I have an email from MedStar from 2016-10-10 outlining the discrepancy. One response id had all nulls for the DETECT screening items. One response id could not be found in the query. The rest were ineligible for the DETECT screening tool because of age.
+```{r eval=FALSE}
+response_ids %>% 
+  anti_join(medstar_detect, by = "response_num") %>%  # 6 response numbers
+  unique()
+```
 
-At this point, there should be 9 response id's from the compliance data that have a match in the DETECT screening tool data.
+
+There are 6 responses id's in the MedStar compliance data that don't appear in the MedStar DETECT screening items data (results hidden to protect participant privacy). I have an email from MedStar from 2016-10-10 outlining the discrepancy. One response id had all nulls for the DETECT screening items. One response id could not be found in the query. The rest were ineligible for the DETECT screening tool because of age.
+
+At this point, there should be 8 response id's from the compliance data that have a match in the DETECT screening tool data (results hidden to protect participant privacy).
+
+```{r eval=FALSE}
+response_ids %>% 
+  semi_join(medstar_detect, by = "response_num") %>%  # 8 response numbers
+  unique()
+```
 
 
 ## Add a dataset identifier tag
@@ -257,7 +274,19 @@ medstar_detect %>%
 
 So, the MedStar detect screening data contains 1,247 total rows of data that correspond to 1,245 911 responses, 1,247 unique response/name combinations, and 1,141 unique people (assuming first name, last name, and age uniquely identifies people in this data).
 
+
+## Rename response number
+
+In order to be consistent and reduce confusion, we will use the terminology from DETECT-Patient-Data_2017-07-19_144931.xlsx.
+
+```{r}
+medstar_detect <- medstar_detect %>% rename(incident_call_number = response_num)
+about_data(medstar_detect) # 1,247 observations and 44 variables
+```
+
 [top](#top)
+
+&nbsp;
 
 
 
@@ -309,7 +338,8 @@ about_data(medstar_demo) # 99,724 observations and 16 variables
 ## Grab just the first part of two-part first names
 
 ```{r}
-medstar_demo <- medstar_demo %>% mutate(first_name = str_extract(first_name, "^\\S*"))
+medstar_demo <- medstar_demo %>% 
+  mutate(first_name = str_extract(first_name, "^\\S*"))
 ```
 
 
@@ -349,36 +379,28 @@ about_data(medstar_demo) # 99,311 observations and 16 variables
 ```
 
 
-## Check for incident call numbers that correspond to more than one person
+## Check for incident PCR numbers that correspond to more than one person
 
-```{r eval=FALSE}
-# Grab incident numbers where grouping by incident call number doesn't match grouping by incident call number and name.
-# no_match <- medstar_demo %>%
-#   group_by(incident_call_number) %>%
-#   mutate(incident_row = row_number()) %>%
-#   group_by(incident_call_number, first_name) %>%
-#   mutate(incident_name_row = row_number()) %>%
-#   filter(incident_row != incident_name_row) %>%
-#   pull(incident_call_number) %>%  # 20 rows
-#   unique() # 3 unique incidents
+NOTE: No two people should have the same incident PCR number; however, a single person may have multiple incident PCR numbers if they were treated by MedStar on multiple occasions.
 
-# Manually review these records
-# medstar_demo %>%
-#   filter(incident_call_number %in% no_match) %>%
-#   arrange(incident_call_number, first_name) %>% 
-#   # To make it easier, just keep one row per incident / name
-#   group_by(incident_call_number, first_name) %>% 
-#   mutate(row = row_number()) %>% 
-#   filter(row == 1) # 6 rows
+NOTE: There are multiple rows in this data for each person. Those rows that are complete duplicates were already dropped above. Because our purpose is just to see if there are any instances were a incident PCR number corresponds to more than one name, we are just going to keep one row per combination of incident PCR number and first name.
+
+```{r}
+medstar_demo %>% 
+  group_by(incident_pcr_number, first_name) %>% 
+  mutate(count = row_number()) %>% 
+  filter(count == 1) %>% # 2,018 rows
+  ungroup() %>% 
+  summarise(
+    `Rows grouped by PCR and Name` = n(),
+    `Unique PCR numbers` = unique(incident_pcr_number) %>% length()
+  )
 ```
 
-There can be more than one person per incident.
+The number of rows when grouped by incident PCR number and name (2,019) is the same as the number of unique incident PCR numbers. Therefore, each incident PCR number is associated with a single person. Again, however, any given person my have multiple incident PCR numbers if they were treated by MedStar more than once.
 
-150927... Includes information about two people. A man and a woman with the same last name. Both over age 65.
 
-151011... (also medstar_detect) Includes information about two people. A man and a woman with the same last name. Both over age 65.
-
-151024... (also medstar_detect) Includes information about two people. A man and a woman with the same last name. Both over age 65.
+## Count rows, unique responses, and unique people
 
 ```{r}
 medstar_demo %>% 
@@ -395,15 +417,79 @@ medstar_demo %>%
   )
 ```
 
-So, the MedStar demographics and health data contains 99,311 total rows of data that correspond to 2,011 911 responses, 2,018 PCR numbers, 2,014 unique response/name combinations, and 1,776 unique people (assuming first name, last name, and age uniquely identifies people in this data).
+So, the MedStar demographics and health data contains 99,311 total rows of data that correspond to 2,011 911 responses, 2,018 incident PCR numbers, 2,014 unique response/name combinations, and 1,776 unique people (assuming first name, last name, and age uniquely identifies people in this data).
 
-Spoke with MedStar on 2017-07-27. There are two reasons for multiple PCR numbers for a given incident number.
 
-First, as described in the cases above, if there is more than one person treated at a given incident, they each get a unique PCR number.
+## Why does "Unique PCR" and "Unique Incident And Name" Differ?
 
-Second, it could be an error caused by the chart being reopened to add more data. That appears to have happened some in our data. 
+Theoretically, these should be the same. Below, we inspect the data to understand the discrepancy (results hidden to protect participant privacy).
 
-When thinking about linking information in this data with screening information, the combination of incident call number and first name will be our unique identifier of interest.
+```{r eval=FALSE}
+medstar_demo %>% 
+  
+  # Count total rows for each PCR number
+  group_by(incident_pcr_number) %>% 
+  mutate(count_pcr = n()) %>% 
+  
+  # Count total rows for each combo of incident and name
+  group_by(incident_call_number, first_name) %>% 
+  mutate(incident_name_count = n()) %>% 
+  
+  # Where do they differ?
+  ungroup() %>% 
+  filter(count_pcr != incident_name_count) %>% 
+  
+  # PCR number changes more frequently (2,108) than incident/name combos (2,104)
+  # Keep one row per PCR number
+  group_by(incident_pcr_number) %>% 
+  filter(row_number() == 1)
+```
+
+
+There are 4 groups of incident call numbers that have multiple incident PCR numbers for the same person. For example:
+
+incident_call_number | incident_pcr_number | first_name | last_name
+-------------------- | ------------------- | ---------- | ---------
+150917001            | 15000001            | John       | Smith
+150917001            | 15000002            | John       | Smith
+
+We spoke with MedStar on 2017-07-27. There are two reasons for multiple PCR numbers for a given incident number:
+
+1. If there is more than one person treated at a given incident, they each get a unique PCR number, which does not apply to the cases above.
+
+2. It could be an error caused by the chart being reopened to add more data. That appears to have happened some in our data. The dates, times, etc. are all identical. 
+
+Therefore, for each group, we are going to keep only one incident PCR number. We will arbitrarily retain the lowest incident PCR number.
+
+
+## Condense incident PCR numbers within combinations of incident call number and name
+
+```{r}
+medstar_demo <- medstar_demo %>% 
+  group_by(incident_call_number, first_name) %>% 
+  mutate(incident_pcr_number = min(incident_pcr_number)) %>% 
+  ungroup()
+```
+
+
+## Count rows, unique responses, and unique people
+
+```{r}
+medstar_demo %>% 
+  mutate(person = paste(first_name, last_name, age, sep = "_")) %>% 
+  group_by(incident_call_number, first_name) %>% 
+  mutate(incident_names = paste(incident_call_number, first_name, sep = "_")) %>% 
+  ungroup() %>% 
+  summarise(
+    `Total Rows` = n() %>% format(big.mark = ","),
+    `Unique Incidents` = unique(incident_call_number) %>% length() %>% format(big.mark = ","),
+    `Unique PCR` = unique(incident_pcr_number) %>% length() %>% format(big.mark = ","),
+    `Unique Incident And Name` = unique(incident_names) %>% length() %>% format(big.mark = ","),
+    `Unique People` = unique(person) %>% length() %>% format(big.mark = ",")
+  )
+```
+
+And now the number of unique PCR numbers and unique combinations of incident call number and name are identical.
 
 
 ## Coerce selected character vectors to factors
@@ -418,6 +504,63 @@ medstar_demo <- medstar_demo %>%
 ```
 
 [top](#top)
+
+&nbsp;
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Add incident PCR number to MedStar DETECT data {#add-pcr}
+
+-------------------------------------------------------------------------------
+
+* Incident PCR number does not currently exist in the DETECT data.
+
+* There can be more than one person per incident call number in the DETECT data. That's the reason incident PCR numbers exist.
+
+* Therefore, we will need to join incident PCR number to the DETECT data by incident call number and name.
+
+```{r}
+medstar_detect <- medstar_detect %>% 
+  left_join(
+    medstar_demo %>%
+      select(incident_call_number, incident_pcr_number, first_name) %>% 
+      group_by(incident_pcr_number) %>% 
+      distinct(), # Only keep unique PCR numbers: 2,014
+    by = c("incident_call_number", "first_name")
+  ) %>% 
+  select(response_date, incident_call_number, incident_pcr_number, everything())
+```
+
+
+## Count rows, unique responses, and unique people
+
+```{r}
+medstar_detect %>% 
+  mutate(person = paste(first_name, last_name, age, sep = "_")) %>% 
+  group_by(incident_call_number, first_name) %>% 
+  mutate(incident_names = paste(incident_call_number, first_name, sep = "_")) %>% 
+  ungroup() %>% 
+  summarise(
+    `Total Rows` = n() %>% format(big.mark = ","),
+    `Unique Incidents` = unique(incident_call_number) %>% length() %>% format(big.mark = ","),
+    `Unique PCR` = unique(incident_pcr_number) %>% length() %>% format(big.mark = ","),
+    `Unique Incident And Name` = unique(incident_names) %>% length() %>% format(big.mark = ","),
+    `Unique People` = unique(person) %>% length() %>% format(big.mark = ",")
+  )
+```
+
+[top](#top)
+
+&nbsp;
 
 
 
@@ -434,178 +577,124 @@ medstar_demo <- medstar_demo %>%
 
 -------------------------------------------------------------------------------
 
-The MedStar DETECT data has 1,247 observations for 1,245 unique responses / people.
+* The MedStar DETECT data has 1,247 unique DETECT screenings - 1 per PCR number
 
-The MedStar demographics and health data has 99,311 observations for 2,014 unique responses / people.
+* The MedStar demographics and health data has 99,311 observations for 2,014 unique incident / person combinations - 1 per PCR number
 
-Each DETECT screening should have a match in the demographics data (incident_call_number <-> response_num).
+* Each PCR number in the DETECT screening data should have a matching PCR number in the demographics data 
+
+
+## Check to make sure PCR numbers match between datasets
 
 ```{r}
-# screening <- medstar_detect %>% arrange(response_num) %>% pull(response_num) %>% unique()
-# demographics <- medstar_demo %>% arrange(incident_call_number) %>% pull(incident_call_number) %>% unique()
-# setdiff(screening, demographics) # Elements in that appear in screening, but not demographics.
-# rm(screening, demographics)
+medstar_detect %>% anti_join(medstar_demo, by = "incident_pcr_number") # 0
 ```
 
 Every DETECT screen has a match in the demographics and health file.
 
-Also remember that in both data sets there are a few instances of multiple people treated at a single incident / response. Therefore, joining only by incident number will join every row in the demographics data with a matching row in screening data, _even when person in that row is different_. 
 
-Additionally, it also appears as though there are cases where there is a matching incident number in both data sets; however, the first name doesn’t match across data sets because of a two-name type name. For example, something like Mary Sue in the DETECT screening data and Mary in the demographics data.
+## Merge data
 
-See the example below.
+```{r}
+medstar_detect_demo <- medstar_demo %>% 
+  left_join(medstar_detect, by = "incident_pcr_number")
+```
+
+```{r}
+about_data(medstar_detect_demo) # 99,311 observations and 60 variables
+```
+
+
+## Data checks
+
+Count the number of differences that between variables that appear in both datasets.
+
+The `na.rm = TRUE` is needed because not every eligible older adult that MedStar treated received the DETECT screening. Those that did not have `NA` for every variable that comes from the DETECT data.
+
+```{r}
+medstar_detect_demo %>% 
+  summarise(
+    `Different incident numbers` = sum(incident_call_number.x != incident_call_number.y, na.rm = TRUE),
+    `Different first` = sum(first_name.x != first_name.y, na.rm = TRUE),
+    `Different last` = sum(last_name.x != last_name.y, na.rm = TRUE),
+    `Different age` = sum(age.x != age.y, na.rm = TRUE)
+  )
+```
+
+## Keep on incident number variable and one first name variable only
+
+```{r}
+medstar_detect_demo <- medstar_detect_demo %>% 
+  select(-incident_call_number.y, -first_name.y) %>% 
+  rename(first_name = first_name.x, incident_call_number = incident_call_number.x)
+```
+
+```{r}
+about_data(medstar_detect_demo) # 99,311 observations and 58 variables
+```
+
+
+## Different last names
+
+(results hidden to protect participant privacy)
 
 ```{r eval=FALSE}
-# # Example
-# # df1 <- tibble(
-# #   id = c(1, 1, 1, 1, 2),
-# #   first_name = c("Sally Ann", "John", "Sally Ann", "John", "Alex"), # Sally and John have the same id
-# #   last_name = c(rep("Smith", 4), "Adams"),
-# #   race = c(1, 1, 1, 1, 3),
-# #   med = c("a", "b", "c", "d", NA)
-# # )
-# 
-# # df2 <- tibble(
-# #   pid = c(1, 1),
-# #   first_name = c("Sally", "John"),
-# #   last_name = rep("Smith", 2),
-# #   screen = c(0, 1)
-# # )
-# 
-# # Compare - Check for discrepencies
-# # df3 <- df1 %>% full_join(df2, by = c("id" = "pid"))
-# # df3
-# 
-# # df3 <- df1 %>% full_join(df2, by = c("id" = "pid", "first_name"))
-# # df3
-# 
-# # df3 %>%
-# #   select(id, first_name) %>%
-# #   distinct() %>%                               # Reduces to unique id/name combinations
-# #   mutate(combo = row_number()) %>%             # Number each row
-# #   spread(combo, first_name) %>%                # Creates a column for each name
-# #   mutate(n_names = rowSums(!is.na(.)) - 1) %>% # Count non-missing values in row, minus the id
-# #   filter(n_names > 1) %>%                      # Keep rows with more than 1 name
-# #   select_if(~sum(!is.na(.)) > 0) %>%           # Drop all of the empty columns
-# #   gather(col_num, names, -id, -n_names) %>%    # Change to long format
-# #   filter(!is.na(names)) %>%                    # Drop all the rows with a value of NA for names
-# #   arrange(id) %>%
-# #   select(id, names) %>%
-# #   group_by(id) %>%
-# #   mutate(
-# #     row = row_number(),
-# #     row = paste0("First Name ", row)
-# #   ) %>%
-# #   spread(row, names)
-# 
-# # In the end, I should have two complete rows for Sally (one for med a and one for med c), two complete rows for John (one for med b and one for med d), and One row for Alex that is missing med and screen.
-# # df1 <- df1 %>% mutate(first_name = str_extract(first_name, "^\\S*"))
-# # df3 <- df1 %>% left_join(df2, by = c("id" = "pid", "first_name"))
-# # df3
-# 
-# # rm(df1, df2, df3)
+medstar_detect_demo %>% 
+  filter(last_name.x != last_name.y) %>% 
+  group_by(incident_pcr_number) %>% 
+  filter(row_number() == 1) %>% 
+  select(incident_pcr_number, starts_with("first_name"), starts_with("last_name"), everything())
 ```
 
+* Incident PCR number 15....99 (2 rows) is a practice chart and should be dropped from the data.
 
-## Merge the data sets
+* The other 4 appear to be true matches, where:
+
+    - There was a slight mispelling
+    
+    - They had a two-name type name. For example, something like "St John"" in the demographics data and "John" in the DETECT data.
+    
+    
+## Drop practice chart
 
 ```{r}
-check_names <- medstar_demo %>% 
-  left_join(medstar_detect, by = c("incident_call_number" = "response_num", "first_name"))
-about_data(check_names) # 99,311 observations and 58 variables
+medstar_detect_demo <- medstar_detect_demo %>% 
+  filter(last_name.x != "Practice chart")
 ```
-
-**Are all 1,247 screening rows still in the data?**
 
 ```{r}
-check_names %>% 
-  group_by(incident_call_number, first_name) %>% # There are responses with a screening for two different people
-  mutate(incident_name_id = row_number()) %>% # 1 to r for each combination of incident number and first name
-  ungroup() %>% 
-  filter(incident_name_id == 1) %>% # 1 row per incident number and name
-  group_by(detect_data) %>% 
-  summarise(n())
+about_data(medstar_detect_demo) # 99,309 observations and 58 variables
 ```
 
 
-## How many incident numbers in each data set match, but do not have matching first names?
+## Different ages
+
+(results hidden to protect participant privacy)
 
 ```{r eval=FALSE}
-# check_names %>%
-#   select(incident_call_number, first_name) %>%
-#   distinct() %>%                                              # Reduces to unique id/name combinations
-#   mutate(combo = row_number()) %>%                            # Number each row
-#   spread(combo, first_name) %>%                               # Creates a column for each name
-#   mutate(n_names = rowSums(!is.na(.)) - 1) %>%                # Count non-missing values in row, minus the id
-#   filter(n_names > 1) %>%                                     # Keep rows with more than 1 name
-#   select_if(~sum(!is.na(.)) > 0) %>%                          # Drop all of the empty columns
-#   gather(col_num, names, -incident_call_number, -n_names) %>% # Change to long format
-#   filter(!is.na(names)) %>%                                   # Drop all the rows with a value of NA for names
-#   arrange(incident_call_number) %>%
-#   select(incident_call_number, names) %>%
-#   group_by(incident_call_number) %>%
-#   mutate(
-#     row = row_number(),
-#     row = paste0("First Name ", row)
-#   ) %>%
-#   spread(row, names)
+medstar_detect_demo %>% 
+  filter(age.x != age.y) %>% 
+  group_by(incident_pcr_number) %>% 
+  filter(row_number() == 1) %>% 
+  select(incident_pcr_number, age.x, age.y, everything())
 ```
 
-There are 3 total incident numbers that are associated with two first names. They are all completely different first names. They belong to the instances when a male and female were treated at the same response. There is more information about these cases above.
-
-Because we joined on id AND first name, there shouldn't be any instances of mixing information from "John" and "Sally" between rows. See example above.
-
-Also did a manual double check of the data, and everything looks good.
+Most of these differences appear to be off by rounding errors. Additionally, not every person in the data has a value for age.y. Therefore, we will just keep age.x
 
 
-## How many incident numbers in each data set match, but do not have matching last names?
-
-```{r eval=FALSE}
-# check_names %>%
-#   select(incident_call_number, last_name.x, last_name.y) %>%
-#   filter(last_name.x != last_name.y) %>%                       # Find non-matching pairs
-#   group_by(incident_call_number, last_name.x, last_name.y) %>% 
-#   mutate(row = row_number()) %>% 
-#   filter(row == 1)                                             # Keep one example of each non-matching pair
-```
-
-There appears to be one practice chart in the data. It needs to be removed. 
+## Keep one age variable
 
 ```{r}
-check_names <- check_names %>% filter(!last_name.x == "Practice chart")
-about_data(check_names) # "99,309 observations and 58 variables"
+medstar_detect_demo <- medstar_detect_demo %>% 
+  select(-age.y) %>% 
+  rename(age = age.x)
 ```
 
-The rest of the non-matching pairs are because of two-part last names in x and a single last name in y. For example, St Mary in x and just Mary in y. 
-
-We can just drop last name x, and rename last name y to last name.
-
 ```{r}
-check_names <- check_names %>% mutate(last_name.x = NULL)
-check_names <- check_names %>% rename(last_name = last_name.y)
-check_names <- check_names %>% mutate(row = NULL)
-about_data(check_names) # 99,309 observations and 57 variables
-```
-
-The demographics and health data is now linked to the DETECT screening data. There are some instances when more than one person was screened at a given incident. However, each incident number / first name should be linked to a unique screening - if one exists.
-
-
-## Rename the data set
-
-```{r}
-medstar_detect_demo <- check_names
-rm(check_names)
 about_data(medstar_detect_demo) # 99,309 observations and 57 variables
 ```
 
-
-## Drop the redundant age variable.
-
-```{r}
-medstar_detect_demo$age.y <- NULL
-medstar_detect_demo <- rename(medstar_detect_demo, age = age.x)
-about_data(medstar_detect_demo) # 99,309 observations and 56 variables
-```
+The demographics and health data is now linked to the DETECT screening data. There are some instances when more than one person was screened at a given incident. However, each incident PCR number is linked to a unique screening - if one exists.
 
 
 
