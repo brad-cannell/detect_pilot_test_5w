@@ -14,7 +14,12 @@ The DETECT screening tool was pilot tested between 2015-09-17 and 2015-10-26. On
 
 Below we clean this data and prepare it for further analysis.
 
+
 # Key variable definitions 
+
+It's important to understand the meaning of patient, and perpetrator, identification variables in the data. Additonally, it's important to understand these identifiers are related across the various sheets of the Excel file that APS sent us. The following diagram shows how people are identified in the MedStar data:
+
+![](../images/aps_identifiers.png)
 
 * **Case number definition**
 
@@ -28,12 +33,13 @@ Below we clean this data and prepare it for further analysis.
 
     - An intake is the submission or receipt of a report of abuse - a phone call or web-based. The Intake Start Date refers to the date the staff member opens a new record to begin recording the report. In the case of a phone call they have picked up from a caller on the abuse hotline, the intake starts when the Intake worker begins to speak to the individual, open the record and begin recording what they are hearing. In the case of reports made using the web-based system, intake begins when the Intake worker pulls the web-report and begins processing it in the system. There is the possibility that the intake may begin on one day but not end until the next day.
 
+
 # Table of contents
 
 1. [Import APS client info data](#client-info)      
 2. [Import APS allegations data](#allegations)    
-3. [Import APS Closure Reason](#closure)      
-4. [Import APS allegation disposition data](#disposition)     
+3. [Import APS closure reason](#closure)      
+4. [Import APS disposition data](#disposition)     
 5. [Save data for merge with screening data](#save)     
 
 ```{r setup, include=FALSE}
@@ -134,6 +140,8 @@ about_data(client_data)
 There are **747 observations and 13 variables** in the APS client info data.
 
 [top](#top)
+
+&nbsp;
 
 
 
@@ -272,6 +280,8 @@ There are **1,051 observations and 4 variables** in the APS allegations data.
 
 [top](#top)
 
+&nbsp;
+
 
 
 
@@ -338,6 +348,8 @@ There are **747 observations and 3 variables** in the APS closure reason data
 
 [top](#top)
 
+&nbsp;
+
 
 
 
@@ -349,7 +361,7 @@ There are **747 observations and 3 variables** in the APS closure reason data
 
 -------------------------------------------------------------------------------
 
-# Import APS [allegation disposition](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2700.asp#APS_2700) data {#disposition}   
+# Import APS [disposition](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2700.asp#APS_2700) data {#disposition}   
 
 -------------------------------------------------------------------------------
 
@@ -459,7 +471,41 @@ about_data(disposition)
 
 There are **1,128 observations and 5 variables** in the APS disposition data.
 
+
+## Is perp id unique to the person, or unique to the person/investigation?
+
+(results hidden to protect participant privacy)
+
+```{r eval=FALSE}
+disposition %>% 
+  group_by(perp_id) %>% 
+  summarise(`Count of case_num by perp_id` = unique(case_num) %>% length()) %>% 
+  filter(`Count of case_num by perp_id` > 1)
+```
+
+There are 53 perpetrator id’s that are associated with more than one case number. Below we inspect these cases (results hidden to protect participant privacy).
+
+```{r eval=FALSE}
+disposition %>% # Join with client_data to get name
+  left_join(
+    client_data %>% 
+      group_by(case_num) %>% 
+      mutate(count = row_number()) %>% 
+      filter(count == 1) %>% # Keep one row per case_number
+      select(case_num, full_name, intake_start),
+    by = "case_num") %>% 
+  group_by(perp_id) %>% 
+  mutate(count_case_num = unique(case_num) %>% length()) %>% 
+  filter(count_case_num > 1) %>% 
+  arrange(perp_id, case_num) %>% 
+  select(case_num, intake_start, perp_id, perp, full_name, allegation)
+```
+
+The perpetrator id is tied to a person and is reused across cases.
+
 [top](#top)
+
+&nbsp;
 
 
 
@@ -484,6 +530,8 @@ feather::write_feather(disposition, "/Users/bradcannell/Desktop/disposition.feat
 ```
 
 [top](#top)
+
+&nbsp;
 
 
 ```{r session_info, echo=FALSE}
