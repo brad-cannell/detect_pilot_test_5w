@@ -41,7 +41,7 @@ For more information about our analysis process and results, please click in the
 
 * Data from MedStar that includes demographic and health information for all patients who where age >= 65 and treated during the pilot period
 
-[Process used to clean the APS Investigations data](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/data_clean_aps.nb.html)
+[Process used to clean the APS Investigations data](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/data_02_clean_aps.nb.html)
 
 * Client information
 
