@@ -60,7 +60,7 @@ about_data(client_data) # 747 observations and 13 variables
 
 ```{r}
 medstar_detect <- feather::read_feather("/Users/bradcannell/Desktop/medstar_detect.feather")
-about_data(medstar_detect) # 1,247 observations and 44 variables
+about_data(medstar_detect) # 1,247 observations and 45 variables
 ```
 
 ```{r}
@@ -349,7 +349,7 @@ Additionally, using the select function below we drop variable names that will c
 ```{r}
 medstar_detect_subset <- medstar_detect %>% 
   mutate(id = row_number()) %>% 
-  select(id, response_num:adls61)
+  select(id, response_date:adls61)
 ```
 
 
@@ -360,7 +360,7 @@ medstar_detect_w_pair <- possible_matches_detect %>%
   left_join(medstar_detect_subset, by = "id") %>% 
   select(id, row, pair, everything())
 
-about_data(medstar_detect_w_pair) # 132 observations and 45 variables
+about_data(medstar_detect_w_pair) # 132 observations and 46 variables
 ```
 
 ```{r}
@@ -412,18 +412,18 @@ anti_join returns all rows in MedStar's legal compliance data that do not have a
 
 ```{r eval=FALSE}
 response_ids %>% 
-  anti_join(medstar_detect_w_pair, by = "response_num") %>%  # 7 response numbers
-  unique()
+  anti_join(medstar_detect_w_pair, by = c("response_num" = "incident_call_number")) %>%  
+  unique() # 7 response numbers
 ```
 
 
-There are 7 response numbers in the MedStar compliance data that don't appear in the MedStar DETECT screening items data that was matched to APS cases. I have an email from MedStar from 2016-10-10 outlining the discrepancy. One response id had all nulls for the DETECT screening items. One response id could not be found in the query. The rest were ineligible for the DETECT screening tool because of age.
+There are 7 incidence call numbers in the MedStar compliance data that don't appear in the MedStar DETECT screening items data that was matched to APS cases. I have an email from MedStar from 2016-10-10 outlining the discrepancy. One response id had all nulls for the DETECT screening items. One response id could not be found in the query. The rest were ineligible for the DETECT screening tool because of age.
 
 Are those same response numbers also missing from the full medstar detect dataset (results hidden to protect participant privacy)?
 
 ```{r eval=FALSE}
 response_ids %>% 
-  anti_join(medstar_detect, by = "response_num") # 7 response numbers
+  anti_join(medstar_detect, by = c("response_num" = "incident_call_number")) # 6 response numbers
 ```
 
 
@@ -441,15 +441,15 @@ semi_join returns all rows in MedStar's legal compliance data that have a match 
 ```{r}
 medstar_detect_w_pair %>% 
   filter(
-    response_num %in% (
+    incident_call_number %in% (
       response_ids %>% 
-        semi_join(medstar_detect_w_pair, by = "response_num") %>% 
+        semi_join(medstar_detect_w_pair, by = c("response_num" = "incident_call_number")) %>% 
         pull(response_num)
     )
   ) %>% 
-  arrange(response_num) %>% 
+  arrange(incident_call_number) %>% 
   summarise(
-    `Unique Numbers` = unique(response_num) %>% length(), # 7
+    `Unique Numbers` = unique(incident_call_number) %>% length(), # 7
     `Total Rows`     = n() # 11
   )
 ```
@@ -462,10 +462,10 @@ Add a variable to the data to indicate if the response number in each row was al
 ```{r}
 medstar_detect_w_pair <- medstar_detect_w_pair %>% 
   mutate(
-    compliance_match = response_num %in% pull(response_ids, response_num) %>% as.integer()
+    compliance_match = incident_call_number %in% pull(response_ids, response_num) %>% as.integer()
   )
 
-about_data(medstar_detect_w_pair) # 132 observations and 46 variables
+about_data(medstar_detect_w_pair) # 132 observations and 47 variables
 ```
 
 ```{r}
@@ -518,7 +518,7 @@ append_aps_detect_w_pair <- medstar_detect_w_pair %>%
   bind_rows(client_data_w_pair) %>% 
   arrange(row)
 
-about_data(append_aps_detect_w_pair) # 264 observations and 50 variables
+about_data(append_aps_detect_w_pair) # 264 observations and 51 variables
 ```
 
 
@@ -568,7 +568,7 @@ append_aps_detect_w_pair <- append_aps_detect_w_pair %>%
   ) %>% 
   as_tibble()
 
-about_data(append_aps_detect_w_pair) # 264 observations and 50 variables
+about_data(append_aps_detect_w_pair) # 264 observations and 51 variables
 ```
 
 ```{r}
@@ -621,7 +621,7 @@ After manual inspection, the last true match has a weight of 0.8320895. Will dro
 append_aps_detect_w_pair <- append_aps_detect_w_pair %>% 
   filter(Weight >= 0.8320895)
 
-about_data(append_aps_detect_w_pair) # 182 observations and 50 variables
+about_data(append_aps_detect_w_pair) # 182 observations and 51 variables
 ```
 
 
@@ -678,7 +678,7 @@ None of the response id numbers from the MedStar compliance data are among the r
 append_aps_detect_w_pair <- append_aps_detect_w_pair %>% 
   filter(response_date <= intake_start)
 
-about_data(append_aps_detect_w_pair) # 112 observations and 50 variables
+about_data(append_aps_detect_w_pair) # 112 observations and 51 variables
 ```
 
 * Updated on 2017-01-28: changed from response_date < intake_start to response_date <= intake_start. Remember, intake_start is just APS receiving a report.
@@ -692,7 +692,7 @@ Calculate time between response date and intake
 append_aps_detect_w_pair <- append_aps_detect_w_pair %>% 
   mutate(time_diff = difftime(intake_start, response_date, units = "days"))
 
-about_data(append_aps_detect_w_pair) # 112 observations and 51 variables
+about_data(append_aps_detect_w_pair) # 112 observations and 52 variables
 ```
 
 
@@ -713,7 +713,7 @@ append_aps_detect_w_pair <- append_aps_detect_w_pair %>%
   ) %>% 
   ungroup()
 
-about_data(append_aps_detect_w_pair) # 112 observations and 53 variables
+about_data(append_aps_detect_w_pair) # 112 observations and 54 variables
 ```
 
 
@@ -726,7 +726,7 @@ Double-checked. msid and apsid were carried forward correctly. I also checked to
 append_aps_detect_w_pair <- append_aps_detect_w_pair %>% 
   select(msid, apsid, row, pair, everything(), -id)
 
-about_data(append_aps_detect_w_pair) # 112 observations and 52 variables
+about_data(append_aps_detect_w_pair) # 112 observations and 53 variables
 ```
 
 
@@ -738,11 +738,13 @@ Even rows (MedStar rows) contain all the APS information. So, just keep the even
 append_aps_detect <- append_aps_detect_w_pair %>% 
   filter(row %% 2 == 0)
 
-about_data(append_aps_detect) # 56 observations and 52 variables
+about_data(append_aps_detect) # 56 observations and 53 variables
 ```
 
 
 ## Make sure that each row is unique to a person / DETECT screening date
+
+![](../images/aps_identifiers.png)
 
 * **Case number definition**: APS case / investigation number.
 
@@ -750,30 +752,32 @@ about_data(append_aps_detect) # 56 observations and 52 variables
 
 * **Intake start definition**: An intake is the submission or receipt of a report of abuse - a phone call or web-based. The Intake Start Date refers to the date the staff member opens a new record to begin recording the report. In the case of a phone call they have picked up from a caller on the abuse hotline, the intake starts when the Intake worker begins to speak to the individual, open the record and begin recording what they are hearing. In the case of reports made using the web-based system, intake begins when the Intake worker pulls the web-report and begins processing it in the system. There is the possibility that the intake may begin on one day but not end until the next day.
 
-* **Response number definition**: From MedStar: There is incident and response number. Incident is one incident. Response is unique to patient/truck.
+![](../images/medstar_detect_identifiers.png)
+
+* **Incident call number** is unique to the incident/respnse (#2 in the diagram). In cases where there was more than one person screened at an incident/response, the response number is not unique to the person/screening (#3 and #4 in the diagram).
+    
+* **Incident PCR number** is unique to the person/DETECT screening at a given incident/response. NOTE: No two people should have the same incident PCR number; however, a single person may have multiple incident PCR numbers if they were treated by MedStar on multiple occasions.
 
 * **Response date definition**: Day that MedStar ran the 911 call and filled out the DETECT screening tool.
 
-If a row is unique to a person / DETECT screening date, then the combination of first/last name and response date should be unique.
+If a row is unique to a person / DETECT screening date, then the incident PCR number should be unique.
 
 ```{r}
 append_aps_detect %>% 
-  mutate(compare = paste0(first_name, last_name, response_date)) %>% 
-  select(compare, everything()) %>% 
-  arrange(compare) %>% 
-  group_by(compare) %>% 
+  select(incident_pcr_number, everything()) %>% 
+  arrange(incident_pcr_number) %>% 
+  group_by(incident_pcr_number) %>% 
   mutate(count = row_number() %>% max()) %>% 
   filter(count > 1) %>% # Stop here to view duplicates
-  summarise(Duplicates = duplicated(compare) %>% sum()) %>% 
+  summarise(Duplicates = duplicated(incident_pcr_number) %>% sum()) %>% 
   ungroup() %>% 
   summarise(
-    `Duplicate Combinations` = n(), # 9
+    `Duplicate PCR Numbers`  = n(), # 9
     `Duplicate Rows`         = sum(Duplicates) # 10
   ) 
 ```
 
-
-There are 9 combinations of first/last name and response date that appear in more than one row. One combination appears in three rows (2 duplicates) for a total of 10 rows with a duplicated combination (19 rows total) of in terms of first/last name and response date. Investigate these manually.
+There are 9 incident PCR numbers that appear in more than one row. One combination appears in three rows (2 duplicates) for a total of 10 rows with a duplicated combination (19 rows total). Investigate these manually.
 
 
 ## Rules for dropping duplicates
@@ -789,23 +793,23 @@ In this context, duplicates are in terms of person and response date (date DETEC
 
 ## Application of the dropping rules in this data
 
-* Rows 4 and 6 only differ by intake stage. Row 6 will be dropped.
+* Rows 8 and 10 only differ by intake stage. Row 10 will be dropped.
 
-* For rows 112 and 126 one DETECT screening was matched with two different APS investigations. We have no way of knowing which (if any) investigation was truly a result of DETECT. Therefore, in cases like this we will keep the row with the shortest amount of time between screening and intake start. In this specific case we will drop row 126.
-
-* For rows 110 and 124 one DETECT screening was matched with two different APS investigations. We have no way of knowing which (if any) investigation was truly a result of DETECT. Therefore, in cases like this we will keep the row with the shortest amount of time between screening and intake start. In this specific case we will drop row 124.
+* For rows 112 and 126 one DETECT screening was matched with two different APS investigations (incident call numbers). We have no way of knowing which (if any) investigation was truly a result of DETECT. Therefore, in cases like this we will keep the row with the shortest amount of time between screening and intake start. In this specific case we will drop row 126.
 
 * Rows 84 and 86 only differ by intake stage. Row 86 will be dropped.
 
-* Rows 8 and 10 only differ by intake stage. Row 10 will be dropped.
-
-* For rows 88 and 156 one DETECT screening was matched with two different APS investigations. We have no way of knowing which (if any) investigation was truly a result of DETECT. Therefore, in cases like this we will keep the row with the shortest amount of time between screening and intake start. In this specific case we will drop row 156.
-
-* Rows 134 and 136 only differ by intake stage. Row 136 will be dropped.
+* For rows 88 and 156 one DETECT screening was matched with two different APS investigations (incident call numbers). We have no way of knowing which (if any) investigation was truly a result of DETECT. Therefore, in cases like this we will keep the row with the shortest amount of time between screening and intake start. In this specific case we will drop row 156.
 
 * Rows 106 and 108 only differ by intake stage. Row 108 will be dropped.
 
+* For rows 110 and 124 one DETECT screening was matched with two different APS investigations (incident call numbers). We have no way of knowing which (if any) investigation was truly a result of DETECT. Therefore, in cases like this we will keep the row with the shortest amount of time between screening and intake start. In this specific case we will drop row 124.
+
 * Rows 114, 116 and 118 only differ by intake stage. Rows 116 and 118 will be dropped.
+
+* Rows 4 and 6 only differ by intake stage. Row 6 will be dropped.
+
+* Rows 134 and 136 only differ by intake stage. Row 136 will be dropped.
 
 
 ## Drop duplicate rows and the compare variable
@@ -814,7 +818,7 @@ In this context, duplicates are in terms of person and response date (date DETEC
 append_aps_detect <- append_aps_detect %>% 
   filter(!(row %in% c(6, 126, 124, 86, 10, 156, 136, 108, 116, 118)))
 
-about_data(append_aps_detect) # 46 observations and 52 variables
+about_data(append_aps_detect) # 46 observations and 53 variables
 ```
 
 
@@ -1032,7 +1036,7 @@ sum(duplicated(merged)) # None
 ```
 
 ```{r}
-about_data(merged) # 67 observations and 57 variables
+about_data(merged) # 67 observations and 58 variables
 ```
 
 
@@ -1065,9 +1069,9 @@ To improve readability of codebook
 ```{r to_factor}
 merged <- merged %>%
   map_at(
-    .at = c("msid", "apsid", "row", "group", "birth_month", "birth_day", "birth_year", "Weight", 
-            "case_num", "intake_stage", "zip", "response_num", "response_date", "aps_report_num", 
-            "allegation", "perp", "disposition", "closure_reason"),
+    .at = c("msid", "apsid", "row", "pair", "birth_month", "birth_day", "birth_year", "Weight", 
+            "incident_call_number", "incident_pcr_number", "case_num", "intake_stage", "zip",
+            "aps_report_num", "allegation", "perp", "disposition", "closure_reason"),
     .f = factor
   ) %>%
   as_tibble()
