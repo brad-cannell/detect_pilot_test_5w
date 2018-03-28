@@ -51,9 +51,9 @@ For more information about our analysis process and results, please click in the
 
 * [Investigation closure reasons](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2800.asp#APS_2900)
 
-[Process used to Link records in the cleaned MedStar data with records in the cleaned APS data](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/data_merge_medstar_aps.nb.html)
+[Process used to Link records in the cleaned MedStar data with records in the cleaned APS data](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/data_03_merge_medstar_aps.nb.html)
 
-[Processed used to preprocess merged data for analysis](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/data_preprocess_merged_for_analysis.nb.html)
+[Processed used to preprocess merged data for analysis](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/data_04_preprocess_merged_for_analysis.nb.html)
 
 * Variable manipulation and recode missing.
 
