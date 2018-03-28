@@ -32,8 +32,6 @@ Sys.setenv(TZ = "US/Central")
 
 ```{r load_packages, message=FALSE}
 library(tidyverse)
-# library(gmodels)
-# library(caret)
 library(bfuncs)
 ```
 
