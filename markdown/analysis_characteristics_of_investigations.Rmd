@@ -12,7 +12,7 @@ In this file we conduct exploratory analysis of the merged DETECT/APS data. See 
 
 We start with the following data:
 
-1. **merged_screening_recode_na_deidentified.feather** - MedStar DETECT screenings that were matched to APS investigations on incident PCR number. For each of the DETECT screening items "Don't Know" and "Not applicable or No Caregiver" were recoded to NA and person-level identifiers removed from the data. This dataset was created in data_04_preprocess_merged_for_analysis.Rmd.
+* **merged_screening_recode_na_deidentified.feather** - MedStar DETECT screenings that were matched to APS investigations on incident PCR number. For each of the DETECT screening items "Don't Know" and "Not applicable or No Caregiver" were recoded to NA and person-level identifiers removed from the data. This dataset was created in data_04_preprocess_merged_for_analysis.Rmd.
 
 
 # Table of contents
