@@ -64,7 +64,7 @@ For more information about our analysis process and results, please click in the
 
 [Analysis of all known MedStar reports to APS in 2015](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/analysis_medstar_reports_to_aps_2015.nb.html)
 
-[Characteristics of the APS investigations that we were able to link to DETECT screenings]()
+[Characteristics of the APS investigations that we were able to link to DETECT screenings](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/analysis_characteristics_of_investigations.nb.html)
 
 [Analysis of the individual screening tool items]()
 

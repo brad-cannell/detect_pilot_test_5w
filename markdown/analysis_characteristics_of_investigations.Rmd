@@ -1,153 +1,299 @@
 ---
 title: "Characteristics Of APS Investigations That Could Be Linked To DETECT Screenings"
 date: "Created: 2016-10-14 <br> Updated: `r Sys.Date()`"
-output: github_document
+output: 
+  html_notebook:
+    css: custom-css.css
 ---
 
+# Overview
+
+In this file we conduct exploratory analysis of the merged DETECT/APS data. See table of contents immediately below for list of specific analyses.
+
+We start with the following data:
+
+1. **merged_screening_recode_na_deidentified.feather** - MedStar DETECT screenings that were matched to APS investigations on incident PCR number. For each of the DETECT screening items "Don't Know" and "Not applicable or No Caregiver" were recoded to NA and person-level identifiers removed from the data. This dataset was created in data_04_preprocess_merged_for_analysis.Rmd.
+
+
+# Table of contents
+
+1. [Figure 1. Count of allegations by allegation type](#fig-1)    
+2. [Figure 2. Count of perpetrators by type](#fig-2)   
+3. [Figure 3. Count of closure reasons by type](#fig-3)      
+4. [Figure 4. Count of dispositions by type](#fig-4)      
+5. [Statistical summary of age](#age)     
+6. [Statistical summary of time between MedStar response and APS intake (in days)](#time)    
+7. [Figure 5. Frequency of any validated outcome per investigation (not allegation)](#fig-5)    
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+Sys.setenv(TZ = "US/Central")
+```
+
 ```{r load_packages, message=FALSE}
-# Load packages and functions
 library(tidyverse)
-library(forcats)
-library(gmodels)
-library(caret)
-
-# devtools::install_github("mbcann01/dataclean")
-library(myFunctions)
+# library(gmodels)
+# library(caret)
+library(bfuncs)
 ```
 
-merged_screening_recode.RData was created in preprocess_for_analysis.Rmd
-
-```{r load_data}
-# Load data
-merged_sr <- read_rds("/Users/bradcannell/Desktop/merged_screening_recode.RData")
-about_data(merged_sr) # 67 observations and 138 variables in the data 
+```{r}
+merged_screening_recoded_na_deidentified <- feather::read_feather(
+  "../data/merged_screening_recoded_na_deidentified.feather"
+)
 ```
+
+```{r}
+about_data(merged_screening_recoded_na_deidentified) # 67 observations and 37 variables
+```
+
+
+## Shorten the name of the dataset
+
+Shorten the name of the dataset from **merged_screening_recoded_na_deidentified** to **merged_srd** to make it easier to work with.
+
+```{r}
+merged_srd <- merged_screening_recoded_na_deidentified
+rm(merged_screening_recoded_na_deidentified)
+```
+
+```{r}
+about_data(merged_srd) # 67 observations and 37 variables
+```
+
+&nbsp;
+
+
+
+
+
+
+
+
+
 
 -------------------------------------------------------------------------------
 
-# Exploritory Analysis
+# Figure 1. Count of [allegations](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_1340.asp#APS_1340) by allegation type. {#fig-1}
 
-## Figure 1. Count of [allegations](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_1340.asp#APS_1340) by allegation type.
+-------------------------------------------------------------------------------
 
 ```{r}
-merged_sr %>% 
-  mutate(allegation = allegation %>% fct_infreq() %>% fct_rev()) %>% # Reorder by frequency - small to large
+merged_srd %>% 
+  mutate(allegation = allegation %>% fct_infreq() %>% fct_rev()) %>%
   ggplot(aes(allegation)) +
     geom_bar(stat = "count", fill = "Navy") +
     geom_label(stat = "count", aes(label = ..count..)) +
     scale_y_continuous("Count") +
-    scale_x_discrete("Allegation Type")
+    scale_x_discrete("Allegation Type") +
+    theme_classic()
 ```
 
 **Note:** In some cases there is more than one allegation per APS investigation.
 
--------------------------------------------------------------------------------
+[top](#top)
 
 &nbsp;
 
-## Figure 2. Count of [perpetrators](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_1330.asp#APS_1330) by type.
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Figure 2. Count of [perpetrators](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_1330.asp#APS_1330) by type. {#fig-2}
+
+-------------------------------------------------------------------------------
 
 ```{r}
-merged_sr %>% 
+merged_srd %>% 
   mutate(perp = perp %>% fct_infreq() %>% fct_rev()) %>% # Reorder by frequency - small to large
   ggplot(aes(perp)) +
     geom_bar(stat = "count", fill = "Navy") +
     geom_label(stat = "count", aes(label = ..count..)) +
     scale_y_continuous("Count") +
-    scale_x_discrete("Perpetrator")
+    scale_x_discrete("Perpetrator") +
+    theme_classic()
 ```
 
 **Note:** In some cases there is more than one allegation per APS investigation. APS identifies a perpetrator for each allegation. Therefore, a single APS investigation may have both perpetrator types.
 
--------------------------------------------------------------------------------
+[top](#top)
 
 &nbsp;
 
-## Figure 3. Count of [closure reasons](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2800.asp#APS_2900) by type.
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Figure 3. Count of [closure reasons](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2800.asp#APS_2900) by type. {#fig-3}
+
+-------------------------------------------------------------------------------
 
 ```{r}
-merged_sr %>% 
-  filter(obs == 1) %>% # There is only one closure reason per APS investigation
-  mutate(closure_reason = closure_reason %>% fct_infreq() %>% fct_rev()) %>% # Reorder by frequency - small to large
+merged_srd %>% 
+  filter(allegation_perp_count == 1) %>% # There is only one closure reason per APS investigation
+  mutate(closure_reason = closure_reason %>% fct_infreq() %>% fct_rev()) %>%
   ggplot(aes(closure_reason)) +
     geom_bar(stat = "count", fill = "Navy") +
     geom_label(stat = "count", aes(label = ..count..)) +
-  theme(axis.text.x = element_text(size = 7, angle = 60, hjust = 1)) +
     scale_y_continuous("Count") +
-    scale_x_discrete("Closure Reason")
+    scale_x_discrete("Closure Reason") +
+    theme_classic() +
+    theme(axis.text.x = element_text(size = 7, angle = 60, hjust = 1))
 ```
 
 **Note:** There is only one closure reason per APS investigation. The closure reason is constant across allegations within each investigation.
 
--------------------------------------------------------------------------------
+
+
+[top](#top)
 
 &nbsp;
 
-## Figure 4. Count of [dispositions](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2700.asp#APS_2700) by type.
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Figure 4. Count of [dispositions](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2700.asp#APS_2700) by type. {fig-4}
+
+-------------------------------------------------------------------------------
 
 ```{r}
-merged_sr %>% 
+merged_srd %>% 
   mutate(disposition = disposition %>% fct_infreq() %>% fct_rev()) %>% # Reorder by frequency - small to large
   ggplot(aes(disposition)) +
     geom_bar(stat = "count", fill = "Navy") +
     geom_label(stat = "count", aes(label = ..count..)) +
     scale_y_continuous("Count") +
-    scale_x_discrete("Disposition")
+    scale_x_discrete("Disposition") +
+    theme_classic()
 ```
 
 **Note:** In some cases there is more than one allegation per APS investigation. Each allegation has a disposition. It is not uncommon for there to be a mixture of validated and invalidated allegations within a single APS investigation.
 
--------------------------------------------------------------------------------
+
+
+[top](#top)
 
 &nbsp;
 
-## Table 1. Statistical summary of age.
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Statistical summary of age {#age}
+
+-------------------------------------------------------------------------------
 
 ```{r}
-merged_sr %>% 
-  filter(obs == 1) %>% 
-  select(age) %>% 
-  summary()
+merged_srd %>% 
+  filter(allegation_perp_count == 1) %>% 
+  summarise(
+    n      = n(),
+    mean   = mean(age),
+    median = median(age),
+    sd     = sd(age),
+    min    = min(age),
+    max    = max(age)
+  )
 ```
 
--------------------------------------------------------------------------------
+
+[top](#top)
 
 &nbsp;
 
-## Table 2. Statistical summary of time between MedStar response and APS intake (in days)
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Statistical summary of time between MedStar response and APS intake (in days) {#time}
+
+-------------------------------------------------------------------------------
 
 ```{r}
-merged_sr %>% 
-  filter(obs == 1) %>% 
-  mutate(
-    time = time_diff %>% as.character() %>% as.numeric()
-  ) %>% 
-  select(time) %>% 
-  summary()
+merged_srd %>% 
+  filter(allegation_perp_count == 1) %>% 
+  summarise(
+    n      = n(),
+    mean   = mean(time_diff),
+    median = median(time_diff),
+    sd     = sd(time_diff),
+    min    = min(time_diff),
+    max    = max(time_diff)
+  )
 ```
 
--------------------------------------------------------------------------------
+
+[top](#top)
 
 &nbsp;
 
-## Figure 5. Frequency of any validated outcome per investigation (not allegation)   
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Figure 5. Frequency of any validated outcome per investigation (not allegation) {#fig-5} 
+
+-------------------------------------------------------------------------------
 
 ```{r}
-merged_sr %>% 
-  filter(obs == 1) %>%
-  mutate(any_valid_f = any_valid_f %>% fct_infreq() %>% fct_rev()) %>%
+merged_srd %>% 
+  filter(allegation_perp_count == 1) %>%
+  mutate(any_valid_f = factor(any_valid) %>% fct_infreq() %>% fct_rev()) %>%
   ggplot(aes(any_valid_f)) +
     geom_bar(stat = "count", fill = "Navy") +
     geom_label(stat = "count", aes(label = ..count..)) +
     scale_y_continuous("Count") +
-    scale_x_discrete("Any Validated Allegation")
+    scale_x_discrete("Any Validated Allegation") +
+    theme_classic()
 ```
 
--------------------------------------------------------------------------------
+[top](#top)
 
 &nbsp;
 
-#### Session Info:
 ```{r session_info, echo=FALSE}
 sessionInfo()
 ```
