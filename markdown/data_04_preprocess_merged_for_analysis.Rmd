@@ -1,0 +1,258 @@
+---
+title: "Preprocess merged data for analysis"
+date: "Created: 2016-10-14 <br> Updated: `r Sys.Date()`"
+output: 
+  html_notebook:
+    css: custom-css.css
+---
+
+# Overview
+
+In this file we take the merged MedStar DETECT and APS investigations data that we previously merged together and do a little bit of preprocessing for later analysis.
+
+We start with the following data:
+
+1. **merged.feather** - MedStar DETECT screenings that were matched to APS investigations on name and date of birth. Data cleaned in data_merge_medstar_aps.Rmd
+
+# Table of contents
+
+1. [Preprocess for analysis](#preprocess)     
+    1. Create an **any_valid** variable            
+    2. Recode DETECT responses to NA    
+    
+2. [Create a deidentified version of the merged data](#deidentify)    
+3. [Save preprocessed data](#save)      
+    1. merged_screening_recoded_na.feather    
+    2. merged_screening_recoded_na_deidentified.feather     
+    3. merged_screening_recoded_na_deidentified.csv    
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+Sys.setenv(TZ = "US/Central")
+```
+
+```{r load_packages, message=FALSE}
+library(tidyverse)
+library(bfuncs)
+```
+
+```{r}
+merged <- feather::read_feather("/Users/bradcannell/Desktop/merged.feather")
+about_data(merged) # 67 observations and 58 variables in the data 
+```
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Preprocess for analysis {#preprocess}
+
+-------------------------------------------------------------------------------
+
+Because it is possible for there to be more than one allegation associated with each APS investigation, some investigations have more than one row in the data. It is also possible to have more than one instance of the DETECT screening tool used (response number) per APS investigation (case number).
+
+We want a single outcome per investigation/response combination (pair) in order to create a confusion matrix for each screening item.
+
+To do that, we will create a new variable called "any_valid" that is equal to 1 if the disposition of _any_ allegation was valid, and 0 if the disposition of _all_ allegations were invalid. 
+
+
+## Create any_valid
+
+Create new outcome variable (any_valid) that is equal to 1 when any type of abuse is validated for a given response pair (DETECT screen / APS investigation match). For response pairs with multiple dispositions:   
+  + If even one disposition is valid, then any valid equals 1   
+  + If all dispositions are invalid, then any valid equals 0   
+  + If all dispositions are other, then any valid equals NA
+  + If one disposition is other, and the rest are invalid, then any valid equals NA
+  
+```{r}
+merged <- merged %>% 
+  group_by(pair) %>% 
+  mutate(
+    any_valid = case_when(
+      any(disposition == "Valid")   ~ 1L,
+      all(disposition == "Invalid") ~ 0L,
+      TRUE                          ~ NA_integer_
+    ) 
+  ) %>% 
+  ungroup()
+
+about_data(merged) # 67 observations and 59 variables
+```
+
+
+## Recode DETECT responses to NA
+
+We will recode "Not applicable or No Caregiver" to NA. The only variable that contained this response was no_talk51. This response was given 3 times.
+
+We will also recode "Don’t Know" to NA.
+
+```{r}
+merged_screening_recoded_na <- merged %>% 
+  map_at(
+    .x  = .,
+    .at = select(merged, unusual_odor36:adls61) %>% names(),
+    .f  = fct_recode, NULL = "Not applicable or No Caregiver"
+  ) %>% 
+  map_at(
+    .x  = .,
+    .at = select(merged, unusual_odor36:adls61) %>% names(),
+    .f  = fct_recode, NULL = "Don’t Know"
+  ) %>% 
+  as_tibble()
+
+about_data(merged_screening_recoded_na) # 67 observations and 59 variables
+```
+
+
+## Replace case and response identifiers
+
+Currently the data contains the following various identification-type numbers:
+
+* **msid** - The msid number corresponds to the row in the MedStar DETECT data that the DETECT information in this dataset came from. Created in data_merge_medstar_aps.Rmd. In the merged data it doesn't have any meaning or value and will be dropped.
+
+* **apsid** - The apsid number corresponds to the row in the APS client info data that the APS information in this dataset came from. Created in data_merge_medstar_aps.Rmd. In the merged data it doesn't have any meaning or value and will be dropped.
+
+* **row** - The row number was created during the merging process in data_merge_medstar_aps.Rmd. In the merged data it doesn't have any meaning or value, and will be dropped.
+
+* **pair** - The row number was created during the merging process in data_merge_medstar_aps.Rmd. The pair number originally represented a pair of rows -- one from the APS client data and one from the MedStar DETECT data -- that were possible matches based on name and date of birth. In data_03_merge_medstar_aps.Rmd, after consolidating information across rows, we kept only one row per pair. This variable is no longer meaningful and will be dropped.
+
+* **Incident call number** - The Incident Call Number is unique to the MedStar incident/response, but not necessarily a unique DETECT screening. In cases where there was more than one person screened at an incident/response, the response number is not unique to the person/screening. Because we are really interested in unique DETECT screenings, this variable will be dropped.
+
+* **Incident PCR number** - The Incident PCR Number is unique to the person/DETECT screening at a given incident/response. NOTE: No two people should have the same incident PCR number; however, a single person may have multiple incident PCR numbers if they were treated by MedStar on multiple occasions. The incident PCR number will be retained.
+
+* **aps_report_number** - This number is used to match rows in this dataset with rows in the data we received from MedStar's legal compliance department. The APS report number will be retained. In data_03_merge_medstar_aps.Rmd we determined how many matching rows were in the merged data. This variable will be dropped.
+
+* **case_num** - APS case / investigation number. Each case number corresponds to a single victim; however, a single victim may have more than one case / investigation. This variable came with the data APS sent me. At this point, there is no variation in case number within incident PCR numbers. In other words, each unique DETECT screening has already been linked to one, and only one, APS investigation. If we replace case number with an arbitrary number that can't be linked back to the APS, then case number no longer carries any unique information above and beyond incident PCR number and should be dropped.
+
+* **intake_stage** - That's an ID number assigned to the Intake. Each Intake (Report to APS) has its own number (called intake stage). A single case may have more than one intake. For example, case number 12345 has two intakes associated with it, 9 days apart, each with their own ID number. In the allegations data, which provides allegations associated with each intake, you can see that each of the two intakes associated with this case have multiple allegations. This variable came with the data APS sent me. In data_03_merge_medstar_aps.Rmd we dropped all rows that only differed by intake stage. This variable no longer contains any useful information and will be dropped.
+
+* **perp_id** - Unique identifier for the abuse/neglect perpetrator. This variable came with the data APS sent me. Perpetrator ID is reused across case numbers. Perpetrator ID will be retained.
+
+
+There are a few problems with these variables:
+
+1. It's a lot to remember/track.
+
+2. They aren't all still meaningful at this point in the analysis.
+
+3. Some of them cannot be included in the deidentified versions of the data that we will submit to [NACJD](https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html). However, creating new arbitrary values that cannot be connected with the original data sources; yet, still capture differences in the values above (e.g. that two rows had the same case_number) could be useful for future analyses.
+
+
+## Dropping identification variables that are no longer meaningful
+
+```{r}
+merged_screening_recoded_na <- merged_screening_recoded_na %>% 
+  select(-msid, -apsid, -row, -pair, -incident_call_number, -aps_report_num, -case_num, 
+         -intake_stage)
+```
+
+```{r}
+about_data(merged_screening_recoded_na) # 67 observations and 51 variables
+```
+
+
+## Create arbitrarily numbered replacement identifiers
+
+For incident PCR number and perpetrator ID so that they cannot be linked back to MedStar or APS data. Additionally, I'm numbering rows within incident PCR number. These rows differ by allegation and perpetrator.
+
+```{r}
+merged_screening_recoded_na <- merged_screening_recoded_na %>% 
+  mutate(
+    incident_pcr_number = group_indices(merged_screening_recoded_na, incident_pcr_number),
+    perp_id = group_indices(merged_screening_recoded_na, perp_id)
+  ) %>% 
+  group_by(incident_pcr_number) %>% 
+  mutate(allegation_perp_count = row_number())
+```
+
+```{r}
+about_data(merged_screening_recoded_na) # 67 observations and 52 variables
+```
+
+[top](#top)
+
+&nbsp;
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Create a deidentified version of the merged data {#deidentify
+
+-------------------------------------------------------------------------------
+
+```{r}
+merged_screening_recoded_na_deidentified <- merged_screening_recoded_na %>% 
+  select(incident_pcr_number, age:compliance_match, time_diff:allegation_perp_count)
+
+about_data(merged_screening_recoded_na_deidentified) # 67 observations and 37 variables
+```
+
+[top](#top)
+
+&nbsp;
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Save preprocessed data {#save}
+
+-------------------------------------------------------------------------------
+
+* Merged data with "Don't Know" and "Not applicable or No Caregiver" recoded to NA
+
+```{r}
+feather::write_feather(
+  merged_screening_recoded_na, 
+  path = "/Users/bradcannell/Desktop/merged_screening_recoded_na.feather"
+)
+```
+
+* Merged data with "Don't Know" and "Not applicable or No Caregiver" recoded to NA and person-level identifiers removed from the data
+
+    - feather version for me
+    
+    - CSV version for upload to [NACJD](https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html)
+
+```{r}
+feather::write_feather(
+  merged_screening_recoded_na_deidentified,
+  "../data/merged_screening_recoded_na_deidentified.feather"
+)
+
+write_csv(
+  merged_screening_recoded_na_deidentified,
+  "../data/merged_screening_recoded_na_deidentified.csv"
+)
+```
+
+[top](#top)
+
+&nbsp;
+
+
+```{r session_info, echo=FALSE}
+sessionInfo()
+```
