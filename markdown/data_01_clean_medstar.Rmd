@@ -8,13 +8,15 @@ output:
 
 # Overview
 
-In this file, we import the raw data files received from MedStar and do some basic data checks.
+In this file, we import the raw data files received from MedStar and do some basic data checks. Additionally, we renumber the incident call numbers and incident PCR numbers so that they cannot be linked back to MedStar's database. This is part of deidentifying the data.
 
-Specifically we import the following two files:
+In this file we import the following files:
 
-1. **DETECT_DATA_PIVOT.xlsx** - Data from MedStar that contains all uses of the DETECT screening tool.   
+1. **response_ids.feather** - These are the response id numbers that correspond to 911 responses where a report was made to APS during the DETECT pilot phase and MedStar compliance was made aware of the report. This data was created in analysis_medstar_reports_to_aps_2015.Rmd.
 
-2. **DETECT-Patient-Data_2017-07-19_144931.xlsx** - Data from MedStar that includes demographic and health information for all patients who where age >= 65 and treated during the pilot period.
+2. **DETECT_DATA_PIVOT.xlsx** - Data from MedStar that contains all uses of the DETECT screening tool.   
+
+3. **DETECT-Patient-Data_2017-07-19_144931.xlsx** - Data from MedStar that includes demographic and health information for all patients who where age >= 65 and treated during the pilot period.
 
 
 # Key variable definitions 
@@ -60,6 +62,10 @@ Sys.setenv(TZ = "US/Central")
 ```{r load_packages, message=FALSE}
 library(tidyverse)
 library(bfuncs)
+```
+
+```{r}
+response_ids <- feather::read_feather("/Users/bradcannell/Desktop/response_ids.feather")
 ```
 
 &nbsp;
@@ -220,10 +226,6 @@ medstar_detect <- medstar_detect %>%
 ## Check response id's
 
 Check to see if all the response id's from the MedStar compliance data exist in the current data.   
-
-```{r}
-response_ids <- feather::read_feather("/Users/bradcannell/Desktop/response_ids.feather")
-```
 
 ```{r eval=FALSE}
 response_ids %>% 
@@ -531,6 +533,8 @@ about_data(medstar_demo) # 99,311 observations and 16 variables
 
 We need to create deidentified datasets for [NACJD](https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html). For our analyses, it's important that incident call numbers in MedStar DETECT data match incident call numbers in the MedStar Demographics data; however, the actual numbers themselves shouldn't matter. Likewise, the original numbers have no relationship to the APS data.
 
+Additionally, we need to make sure the response numbers for the MedStar legal compliance department get renumbered.
+
 1. Select all the incident call numbers from the MedStar Demographics data and all the incident call numbers from the MedStar DETECT data. 
 
 2. Combine them into a single column data frame. 
@@ -580,8 +584,55 @@ medstar_detect <- medstar_detect %>%
   rename(incident_call_number = icn)
 ```
 
+```{r eval=FALSE}
+response_ids %>% 
+  left_join(icn_key, by = c("response_num" = "incident_call_number"))
+```
+
+
+There are 6 responses id's in the MedStar compliance data that don't appear in the MedStar DETECT screening items data (results hidden to protect participant privacy). I have an email from MedStar from 2016-10-10 outlining the discrepancy. One response id had all nulls for the DETECT screening items. One response id could not be found in the query. The rest were ineligible for the DETECT screening tool because of age.
+
+At this point, there should be 8 response id's from the compliance data that have a match in the DETECT screening tool data (results hidden to protect participant privacy).
+
+However, there are 9 response numbers that match an incident call number from either the MedStar demographics data or the MedStar DETECT data (results hidden to protect participant privacy). Below we investigate.
+
+```{r eval=FALSE}
+response_ids %>% 
+  left_join(icn_key, by = c("response_num" = "incident_call_number")) %>% 
+  filter(!is.na(icn)) %>% 
+  anti_join(medstar_detect, by = c("icn" = "incident_call_number"))
+```
+
+After checking the 2016-10-10 email from MedStar, the person with icn 1882 was the person that had all NULL responses for DETECT. This accounts for the discrepancy (8/9 numbers). Next we will create a deidentified version of the incident call numbers that were present in the MedStar legal compliance data. All of the NA’s (numbers reported to compliance with no match in the MedStar DETECT or MedStar Demographics data) will be dropped. 
+
 ```{r}
-rm(icn_key)
+medstar_compliance_deidentified <- response_ids %>% 
+  left_join(icn_key, by = c("response_num" = "incident_call_number")) %>% 
+  filter(!is.na(icn)) %>% # 9 rows
+  select(-response_num) %>% 
+  rename(incident_call_number = icn)
+```
+
+```{r}
+about_data(medstar_compliance_deidentified) # 9 observations and 1 variables
+```
+
+## Save deidentified version 
+
+Save deidentified version of the incident call numbers reported to MedStar's legal compliance department.
+
+```{r}
+feather::write_feather(
+  medstar_compliance_deidentified, 
+  "../data/medstar_compliance_deidentified.feather"
+)
+```
+
+```{r}
+readr::write_csv(
+  medstar_compliance_deidentified, 
+  "../data/medstar_compliance_deidentified.csv"
+)
 ```
 
 
@@ -601,6 +652,11 @@ about_data(medstar_demo) # 99,311 observations and 16 variables
 
 ```{r}
 about_data(medstar_detect) # 1,247 observations and 44 variables
+```
+
+
+```{r}
+rm(icn_key)
 ```
 
 
