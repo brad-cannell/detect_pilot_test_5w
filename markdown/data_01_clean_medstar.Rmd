@@ -46,9 +46,10 @@ In order to be consistent and reduce confusion, after importing the data below, 
 
 1. [Import and clean DETECT screening data](#detect-data)     
 2. [Import and clean demographics and health data](#demographic-data)    
-3. [# Add incident PCR number to MedStar DETECT data](#add-pcr)     
-4. [Merge the screening data with the demographics and health data](#merge)    
-5. [Save data for merge with APS data](#save)    
+3. [Deidentifify incident call numbers and incident PCR numbers](deidentify)     
+4. [Add incident PCR number to MedStar DETECT data](#add-pcr)    
+5. [Merge the screening data with the demographics and health data](#merge)    
+6. [Save data for merge with APS data](#save)    
 
 
 ```{r setup, include=FALSE}
@@ -58,10 +59,6 @@ Sys.setenv(TZ = "US/Central")
 
 ```{r load_packages, message=FALSE}
 library(tidyverse)
-library(feather)
-library(readxl)
-library(stringr)
-library(lubridate)
 library(bfuncs)
 ```
 
@@ -123,13 +120,15 @@ col_info <- c(
   "adls61",                 "text")
 
 # Import data
-medstar_detect <- read_excel(
+medstar_detect <- readxl::read_excel(
   path = "/Users/bradcannell/Desktop/DETECT_DATA_PIVOT.xlsx",
   col_names = col_info[seq(1, length(col_info), 2)],
   col_types = col_info[seq(2, length(col_info), 2)],
   skip = 1)
 rm(col_info)
+```
 
+```{r}
 about_data(medstar_detect) # 1,248 observations and 36 variables in the data
 ```
 
@@ -157,10 +156,14 @@ medstar_detect <- medstar_detect %>%
     dup   = count > 1     # TRUE if there is more than one row per group
   ) %>% 
   filter(!dup) %>% 
-  select(-count, -dup)
+  select(-count, -dup) %>% 
+  ungroup()
+```
 
+```{r}
 about_data(medstar_detect) # 1,247 observations and 36 variables
 ```
+
 
 ## Check for duplicate response numbers
 
@@ -172,6 +175,7 @@ medstar_detect %>%
   ungroup() %>% 
   select(n) # 2 sets of duplicates (4 rows)
 ```
+
 
 151011... Includes information about two people. A man and a woman with the same last name. Both over age 65. Keep both rows because they are not duplicates of each other. They are two separate screenings that occurred at a single 911 response.
 
@@ -187,13 +191,13 @@ about_data(medstar_detect) # "1,247 observations and 36 variables"
 ```{r}
 medstar_detect <- medstar_detect %>%
   mutate(
-    first_name = str_extract(full_name, "^\\S*"),
-    last_name = str_extract(full_name, "\\S*$"),
-    birth_mnth = month(dob),
-    birth_day  = day(dob),
-    birth_year = year(dob),
-    address_num = str_extract(address, "^\\d{1,5}"),
-    address_street = str_trim(str_replace(address, "^\\d{1,5}", "")))
+    first_name     = stringr::str_extract(full_name, "^\\S*"),
+    last_name      = stringr::str_extract(full_name, "\\S*$"),
+    birth_mnth     = lubridate::month(dob),
+    birth_day      = lubridate::day(dob),
+    birth_year     = lubridate::year(dob),
+    address_num    = stringr::str_extract(address, "^\\d{1,5}"),
+    address_street = stringr::str_trim(str_replace(address, "^\\d{1,5}", "")))
 ```
 
 
@@ -201,12 +205,7 @@ medstar_detect <- medstar_detect %>%
 
 ```{r}
 medstar_detect <- medstar_detect %>%
-  # Null to NA
-  map_if(.p = is.character, 
-         .f = function(x) {
-           x[x == "NULL"] <- NA 
-           return(x)}) %>%
-  as_tibble()
+  mutate_if(is.character, ~ {.[. == "NULL"] <- NA; .})
 ```
 
 
@@ -214,10 +213,7 @@ medstar_detect <- medstar_detect %>%
 
 ```{r}
 medstar_detect <- medstar_detect %>%
-  map_at(
-    .at = c(11:36),  # Screening questions
-    .f = factor) %>%
-  as_tibble
+  mutate_at(vars(unusual_odor36:adls61), factor)
 ```
 
 
@@ -281,6 +277,9 @@ In order to be consistent and reduce confusion, we will use the terminology from
 
 ```{r}
 medstar_detect <- medstar_detect %>% rename(incident_call_number = response_num)
+```
+
+```{r}
 about_data(medstar_detect) # 1,247 observations and 44 variables
 ```
 
@@ -324,13 +323,15 @@ col_info <- c(
   "current_meds",         "text")
 
 # Import data
-medstar_demo <- read_excel(
+medstar_demo <- readxl::read_excel(
   path = "/Users/bradcannell/Desktop/DETECT-Patient-Data_2017-07-19_144931.xlsx",
   col_names = col_info[seq(1, length(col_info), 2)],
   col_types = col_info[seq(2, length(col_info), 2)],
   skip = 1)
 rm(col_info)
+```
 
+```{r}
 about_data(medstar_demo) # 99,724 observations and 16 variables
 ```
 
@@ -339,7 +340,7 @@ about_data(medstar_demo) # 99,724 observations and 16 variables
 
 ```{r}
 medstar_demo <- medstar_demo %>% 
-  mutate(first_name = str_extract(first_name, "^\\S*"))
+  mutate(first_name = stringr::str_extract(first_name, "^\\S*"))
 ```
 
 
@@ -348,9 +349,8 @@ medstar_demo <- medstar_demo %>%
 First, check for rows that are entirely duplicated
 
 ```{r}
-order_all_cols <- names(medstar_demo) %>% rlang::syms()
 medstar_demo %>% 
-  arrange(!!!order_all_cols) %>% 
+  arrange(!!! rlang::syms(names(medstar_demo))) %>% 
   group_by_all() %>% 
   filter(n() > 1) %>% 
   count() %>% 
@@ -358,11 +358,9 @@ medstar_demo %>%
   select(n) # 387 groups of duplicates
 ```
 
+
 I manually inspected the duplicate rows. They appear to be genuine duplicates. Below I will drop the duplicate rows.
 
-```{r}
-rm(order_all_cols)
-```
 
 ```{r}
 medstar_demo <- medstar_demo %>% 
@@ -374,7 +372,9 @@ medstar_demo <- medstar_demo %>%
   ungroup() %>% 
   filter(!dup) %>% 
   select(-count, -dup)
+```
 
+```{r}
 about_data(medstar_demo) # 99,311 observations and 16 variables
 ```
 
@@ -495,12 +495,163 @@ And now the number of unique PCR numbers and unique combinations of incident cal
 ## Coerce selected character vectors to factors
 
 ```{r}
-medstar_demo <- medstar_demo %>%
-  map_at(
-    .at = c("gender", "race", "chief_complaint", "primary_impression", "primary_symptom", "other_symptom",
-            "drug_use", "crew_member_id", "medical_surgery_hist", "current_meds"),
-    .f = factor) %>%
-  as_tibble
+medstar_demo <- medstar_demo %>% 
+  mutate_at(
+    vars(gender, race, chief_complaint, primary_impression, primary_symptom, 
+         other_symptom, drug_use, crew_member_id, medical_surgery_hist, 
+         current_meds),
+    factor
+  )
+```
+
+```{r}
+about_data(medstar_demo) # 99,311 observations and 16 variables
+```
+
+[top](#top)
+
+&nbsp;
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Deidentifify incident call numbers and incident PCR numbers {deidentify}
+
+-------------------------------------------------------------------------------
+
+## Incident call numbers
+
+We need to create deidentified datasets for [NACJD](https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html). For our analyses, it's important that incident call numbers in MedStar DETECT data match incident call numbers in the MedStar Demographics data; however, the actual numbers themselves shouldn't matter. Likewise, the original numbers have no relationship to the APS data.
+
+1. Select all the incident call numbers from the MedStar Demographics data and all the incident call numbers from the MedStar DETECT data. 
+
+2. Combine them into a single column data frame. 
+
+3. Remove duplicate incident call numbers.
+
+4. Create a new incident call number that has no relationship to the MedStar data.
+
+5. Join the new incident call number back to the MedStar Demographics data and the MedStar DETECT data.
+
+6. Drop the original incident call numbers.
+
+```{r}
+icn_key <- medstar_demo %>% 
+  select(incident_call_number) %>% 
+  distinct() %>% # 2,011 rows
+  bind_rows(
+    medstar_detect %>% 
+      select(incident_call_number) %>% 
+      distinct() # 1,245 rows
+  ) %>% # 3,256 rows
+  distinct() %>% # 2,011 rows
+  mutate(icn = row_number())
+```
+
+```{r}
+medstar_demo <- medstar_demo %>% 
+  left_join(icn_key, by = "incident_call_number") %>% 
+  select(incident_call_number, icn, everything())
+```
+
+```{r}
+medstar_detect <- medstar_detect %>% 
+  left_join(icn_key, by = "incident_call_number") %>% 
+  select(incident_call_number, icn, everything())
+```
+
+```{r}
+medstar_demo <- medstar_demo %>% 
+  select(-incident_call_number) %>% 
+  rename(incident_call_number = icn)
+```
+
+```{r}
+medstar_detect <- medstar_detect %>% 
+  select(-incident_call_number) %>% 
+  rename(incident_call_number = icn)
+```
+
+```{r}
+rm(icn_key)
+```
+
+
+## Data checks
+
+```{r}
+sum(is.na(medstar_demo$incident_call_number)) # 0
+```
+
+```{r}
+sum(is.na(medstar_detect$incident_call_number)) # 0
+```
+
+```{r}
+about_data(medstar_demo) # 99,311 observations and 16 variables
+```
+
+```{r}
+about_data(medstar_detect) # 1,247 observations and 44 variables
+```
+
+
+## Incident PCR numbers
+
+We need to create deidentified datasets for [NACJD](https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html). For our analyses, it's important that incident PCR numbers in MedStar DETECT data match incident PCR numbers in the MedStar Demographics data; however, the actual numbers themselves shouldn't matter. Likewise, the original numbers have no relationship to the APS data.
+
+1. Select all the incident PCR numbers from the MedStar Demographics data. Currently, there are no incident PCR numbers in the MedStar DETECT data. We add them below.
+
+2. Combine them into a single column data frame. 
+
+3. Remove duplicate incident PCR numbers.
+
+4. Create a new incident PCR number that has no relationship to the MedStar data.
+
+5. Join the new incident PCR number back to the MedStar Demographics data.
+
+6. Drop the original incident PCR numbers.
+
+```{r}
+ipn_key <- medstar_demo %>% 
+  select(incident_pcr_number) %>% 
+  distinct() %>% # 2,014 rows
+  mutate(ipn = row_number())
+```
+
+```{r}
+medstar_demo <- medstar_demo %>% 
+  left_join(ipn_key, by = "incident_pcr_number") %>% 
+  select(incident_call_number, incident_pcr_number, ipn, everything())
+```
+
+```{r}
+medstar_demo <- medstar_demo %>% 
+  select(-incident_pcr_number) %>% 
+  rename(incident_pcr_number = ipn)
+```
+
+```{r}
+rm(ipn_key)
+```
+
+
+## Data checks
+
+```{r}
+sum(is.na(medstar_demo$incident_pcr_number)) # 0
+```
+
+```{r}
+about_data(medstar_demo) # 99,311 observations and 16 variables
 ```
 
 [top](#top)
@@ -646,7 +797,7 @@ medstar_detect_demo %>%
   select(incident_pcr_number, starts_with("first_name"), starts_with("last_name"), everything())
 ```
 
-* Incident PCR number 15....99 (2 rows) is a practice chart and should be dropped from the data.
+* Incident PCR number 977 (2 rows) is a practice chart and should be dropped from the data.
 
 * The other 4 appear to be true matches, where:
 
@@ -712,9 +863,9 @@ The demographics and health data is now linked to the DETECT screening data. The
 -------------------------------------------------------------------------------
 
 ```{r}
-write_feather(medstar_detect, "/Users/bradcannell/Desktop/medstar_detect.feather")
-write_feather(medstar_demo, "/Users/bradcannell/Desktop/medstar_demo.feather")
-write_feather(medstar_detect_demo, "/Users/bradcannell/Desktop/medstar_detect_demo.feather")
+feather::write_feather(medstar_detect, "/Users/bradcannell/Desktop/medstar_detect.feather")
+feather::write_feather(medstar_demo, "/Users/bradcannell/Desktop/medstar_demo.feather")
+feather::write_feather(medstar_detect_demo, "/Users/bradcannell/Desktop/medstar_detect_demo.feather")
 ```
 
 [top](#top)
