@@ -8,11 +8,16 @@ output:
 
 # Overview
 
-In this file we take the merged MedStar DETECT and APS investigations data that we previously merged together and do a little bit of preprocessing for later analysis.
+In this file we take the merged MedStar DETECT and APS investigations data that we previously merged together and do a little bit of preprocessing for later analysis. We also create deidentified datasets that can be uploaded to [NACJD](https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html).
 
 We start with the following data:
 
-1. **merged.feather** - MedStar DETECT screenings that were matched to APS investigations on name and date of birth. Data cleaned in data_merge_medstar_aps.Rmd
+1. **medstar_demo.feather** - Data from MedStar that includes demographic and health information for all patients who where age >= 65 and treated during the pilot period. Data cleaned in data_01_clean_medstar.Rmd.
+
+2. **medstar_detect_demo.feather** - The demographics and health data linked to the DETECT screening data. There are some instances when more than one person was screened at a given incident. However, each incident PCR number is linked to a unique screening - if one exists. Data cleaned in data_01_clean_medstar.Rmd.
+
+3. **merged.feather** - MedStar DETECT screenings that were matched to APS investigations on name and date of birth. Data cleaned in data_03_merge_medstar_aps.Rmd.
+
 
 # Table of contents
 
@@ -20,11 +25,19 @@ We start with the following data:
     1. Create an **any_valid** variable            
     2. Recode DETECT responses to NA    
     
-2. [Create a deidentified version of the merged data](#deidentify)    
-3. [Save preprocessed data](#save)      
-    1. merged_screening_recoded_na.feather    
-    2. merged_screening_recoded_na_deidentified.feather     
-    3. merged_screening_recoded_na_deidentified.csv    
+2. [Create a deidentified version of datasets](#deidentify)    
+    1. medstar_demo    
+    2. medstar_detect_demo   
+    3. merged     
+
+3. [Save processed/deidentified data](#save)      
+    1. medstar_demo_deidentified.feather     
+    2. medstar_demo_deidentified.csv     
+    3. medstar_detect_demo_deidentified.feather     
+    4. medstar_detect_demo_deidentified.csv     
+    5. merged_screening_recoded_na.feather    
+    6. merged_screening_recoded_na_deidentified.feather     
+    7. merged_screening_recoded_na_deidentified.csv    
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(comment = NA)
@@ -37,8 +50,18 @@ library(bfuncs)
 ```
 
 ```{r}
+medstar_demo <- feather::read_feather("/Users/bradcannell/Desktop/medstar_demo.feather")
+about_data(medstar_demo) # 99,311 observations and 16 variables 
+```
+
+```{r}
+medstar_detect_demo <- feather::read_feather("/Users/bradcannell/Desktop/medstar_detect_demo.feather")
+about_data(medstar_detect_demo) # 99,309 observations and 57 variables 
+```
+
+```{r}
 merged <- feather::read_feather("/Users/bradcannell/Desktop/merged.feather")
-about_data(merged) # 67 observations and 58 variables in the data 
+about_data(merged) # 67 observations and 58 variables 
 ```
 
 
@@ -158,18 +181,42 @@ about_data(merged_screening_recoded_na) # 67 observations and 51 variables
 ```
 
 
-## Create arbitrarily numbered replacement identifiers
+## Renumber perpetrator ID
 
-For incident PCR number and perpetrator ID so that they cannot be linked back to MedStar or APS data. Additionally, I'm numbering rows within incident PCR number. These rows differ by allegation and perpetrator.
+Renumber perpetrator ID so that it cannot be linked back to APS data. 
+
+```{r}
+perp_key <- merged_screening_recoded_na %>% 
+  select(perp_id) %>% 
+  distinct() %>% # 46 rows
+  mutate(perp_id_new = row_number())
+```
 
 ```{r}
 merged_screening_recoded_na <- merged_screening_recoded_na %>% 
-  mutate(
-    incident_pcr_number = group_indices(merged_screening_recoded_na, incident_pcr_number),
-    perp_id = group_indices(merged_screening_recoded_na, perp_id)
-  ) %>% 
+  left_join(perp_key, by = "perp_id") %>% 
+  select(-perp_id) %>% 
+  rename(perp_id = perp_id_new)
+```
+
+```{r}
+about_data(merged_screening_recoded_na) # 67 observations and 51 variables
+```
+
+```{r}
+rm(perp_key)
+```
+
+
+## Number rows within incident PCR number
+
+These rows differ from each other by allegation and perpetrator.
+
+```{r}
+merged_screening_recoded_na <- merged_screening_recoded_na %>% 
   group_by(incident_pcr_number) %>% 
-  mutate(allegation_perp_count = row_number())
+  mutate(allegation_perp_count = row_number()) %>% 
+  ungroup()
 ```
 
 ```{r}
@@ -191,14 +238,67 @@ about_data(merged_screening_recoded_na) # 67 observations and 52 variables
 
 -------------------------------------------------------------------------------
 
-# Create a deidentified version of the merged data {#deidentify
+# Create a deidentified version of datasets {#deidentify}
 
 -------------------------------------------------------------------------------
+
+## Create deidentified version of medstar_demo 
+
+Need to renumber crew member ID so that it has no relationship to data in MedStar's database.
+
+```{r}
+crew_key <- medstar_demo %>% 
+  select(crew_member_id) %>% 
+  distinct() %>% # 259 rows
+  mutate(crew_id_new = row_number())
+```
+
+```{r}
+medstar_demo <- medstar_demo %>% 
+  left_join(crew_key, by = "crew_member_id") %>% 
+  select(-crew_member_id) %>% 
+  rename(crew_member_id = crew_id_new)
+```
+
+```{r}
+medstar_demo_deidentified <- medstar_demo %>% 
+  select(incident_pcr_number, age:crew_member_id)
+```
+
+```{r}
+about_data(medstar_demo_deidentified) # 99,311 observations and 12 variables
+```
+
+
+## Create deidentified version of medstar_detect_demo
+
+```{r}
+medstar_detect_demo <- medstar_detect_demo %>% 
+  left_join(crew_key, by = "crew_member_id") %>% 
+  select(-crew_member_id) %>% 
+  rename(crew_member_id = crew_id_new)
+```
+
+```{r}
+medstar_detect_demo_deidentified <- medstar_detect_demo %>% 
+  select(incident_pcr_number, age:current_meds, unusual_odor36:adls61, detect_data:crew_member_id)
+
+about_data(medstar_detect_demo_deidentified) # 99,309 observations and 39 variables
+```
+
+```{r}
+rm(crew_key)
+```
+
+
+## Create deidentified version of merged_screening_recoded_na
 
 ```{r}
 merged_screening_recoded_na_deidentified <- merged_screening_recoded_na %>% 
   select(incident_pcr_number, age:compliance_match, time_diff:allegation_perp_count)
+```
 
+```{r}
 about_data(merged_screening_recoded_na_deidentified) # 67 observations and 37 variables
 ```
 
@@ -221,7 +321,39 @@ about_data(merged_screening_recoded_na_deidentified) # 67 observations and 37 va
 
 -------------------------------------------------------------------------------
 
-* Merged data with "Don't Know" and "Not applicable or No Caregiver" recoded to NA
+    5. merged_screening_recoded_na.feather    
+    6. merged_screening_recoded_na_deidentified.feather     
+    7. merged_screening_recoded_na_deidentified.csv  
+    
+## Deidentified MedStar demographics data
+
+```{r}
+feather::write_feather(medstar_demo_deidentified, "../data/medstar_demo_deidentified.feather")
+```
+
+```{r}
+readr::write_csv(medstar_demo_deidentified, "../data/medstar_demo_deidentified.csv")
+```
+
+
+## Deidentified MedStar demographics and DETECT merged data
+
+```{r}
+feather::write_feather(
+  medstar_detect_demo_deidentified, 
+  "../data/medstar_detect_demo_deidentified.feather"
+)
+```
+
+```{r}
+readr::write_csv(
+  medstar_detect_demo_deidentified, 
+  "../data/medstar_detect_demo_deidentified.csv"
+)
+```
+
+
+## Merged data with "Don't Know" and "Not applicable or No Caregiver" recoded to NA
 
 ```{r}
 feather::write_feather(
@@ -230,18 +362,17 @@ feather::write_feather(
 )
 ```
 
-* Merged data with "Don't Know" and "Not applicable or No Caregiver" recoded to NA and person-level identifiers removed from the data
 
-    - feather version for me
-    
-    - CSV version for upload to [NACJD](https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html)
+## Deidentified merged data with "Don't Know" and "Not applicable or No Caregiver" recoded to NA
 
 ```{r}
 feather::write_feather(
   merged_screening_recoded_na_deidentified,
   "../data/merged_screening_recoded_na_deidentified.feather"
 )
+```
 
+```{r}
 write_csv(
   merged_screening_recoded_na_deidentified,
   "../data/merged_screening_recoded_na_deidentified.csv"
