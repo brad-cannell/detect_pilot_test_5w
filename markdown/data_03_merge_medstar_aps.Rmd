@@ -31,7 +31,7 @@ Specifically:
 1. [Determine which rows are likely to be matches](#find-matches)     
 2. [Merge matched APS rows back with client data](#merge-client-data)         
 3. [Merge matched DETECT rows back with MedStar data](#merge-detect-data)    
-4. [Check response numbers reported to MedStar compliance](#check-response)     
+4. [Check incident call numbers reported to MedStar compliance](#check-response)     
 5. [Appending the MedStar and APS data back together](#append)     
 6. [Clean appended data - possible matched pairs](#clean-pairs)    
 7. [Merge with other APS data](#merge-aps)      
@@ -44,10 +44,7 @@ Sys.setenv(TZ = "US/Central")
 
 ```{r load_packages, message=FALSE}
 library(tidyverse)
-library(lubridate)
 library(RecordLinkage)
-library(stringr)
-library(zoo)
 library(bfuncs)
 ```
 
@@ -64,8 +61,9 @@ about_data(medstar_detect) # 1,247 observations and 45 variables
 ```
 
 ```{r}
-response_ids <- feather::read_feather("/Users/bradcannell/Desktop/response_ids.feather")
-about_data(response_ids) # 14 observations and 1 variables
+medstar_compliance_deidentified <-
+  feather::read_feather("../data/medstar_compliance_deidentified.feather")
+about_data(medstar_compliance_deidentified) # 9 observations and 1 variables
 ```
 
 ```{r}
@@ -113,9 +111,9 @@ Create two new data sets (client data compare and medstar compare) that contain 
 ```{r}
 client_data_compare <- client_data %>%
   mutate(
-    birth_mnth = month(dob),
-    birth_day  = day(dob),
-    birth_year = year(dob)) %>%
+    birth_mnth = lubridate::month(dob),
+    birth_day  = lubridate::day(dob),
+    birth_year = lubridate::year(dob)) %>%
   select(first_name, last_name, birth_mnth:birth_year)
 
 about_data(client_data_compare) # 747 observations and 5 variables
@@ -124,9 +122,9 @@ about_data(client_data_compare) # 747 observations and 5 variables
 ```{r}
 medstar_compare <- medstar_detect %>%
   mutate(
-    birth_mnth = month(dob),
-    birth_day  = day(dob),
-    birth_year = year(dob)) %>%
+    birth_mnth = lubridate::month(dob),
+    birth_day  = lubridate::day(dob),
+    birth_year = lubridate::year(dob)) %>%
   select(first_name, last_name, birth_mnth:birth_year)
 
 about_data(medstar_compare) # 1,247 observations and 5 variables
@@ -395,41 +393,41 @@ Currently, each person has at least two id numbers associated with them (one tha
 
 -------------------------------------------------------------------------------
 
-# Check response numbers reported to MedStar compliance {#check-response}
+# Check incident call numbers reported to MedStar compliance {#check-response}
 
 -------------------------------------------------------------------------------
 
 Check to see if all the response numbers from the MedStar compliance data exist in the medstar detect with pair data.  
 
 ```{r}
-about_data(response_ids) # 14 observations and 1 variables
+about_data(medstar_compliance_deidentified) # 9 observations and 1 variables
 ```
 
 
-We begin with 14 response numbers saved from the MedStar legal compliance data.
+We begin with 9 incident call numbers saved from the MedStar legal compliance data.
 
 anti_join returns all rows in MedStar's legal compliance data that do not have a match in the MedStar DETECT screening items data that was matched to APS cases (results hidden to protect participant privacy).
 
-```{r eval=FALSE}
-response_ids %>% 
-  anti_join(medstar_detect_w_pair, by = c("response_num" = "incident_call_number")) %>%  
-  unique() # 7 response numbers
+```{r}
+medstar_compliance_deidentified %>% 
+  anti_join(medstar_detect_w_pair, by = "incident_call_number") %>%  
+  unique() # 2 incident call numbers
 ```
 
 
-There are 7 incidence call numbers in the MedStar compliance data that don't appear in the MedStar DETECT screening items data that was matched to APS cases. I have an email from MedStar from 2016-10-10 outlining the discrepancy. One response id had all nulls for the DETECT screening items. One response id could not be found in the query. The rest were ineligible for the DETECT screening tool because of age.
+There are 2 incidence call numbers in the MedStar compliance data that don't appear in the MedStar DETECT screening items data that was matched to APS cases. I have an email from MedStar from 2016-10-10 outlining the discrepancy. One incident call number (1882) had all nulls for the DETECT screening items. It isn't clear why 1138 is not showing up in the matched data. below we investigate.
 
 Are those same response numbers also missing from the full medstar detect dataset (results hidden to protect participant privacy)?
 
-```{r eval=FALSE}
-response_ids %>% 
-  anti_join(medstar_detect, by = c("response_num" = "incident_call_number")) # 6 response numbers
+```{r}
+medstar_compliance_deidentified %>% 
+  anti_join(medstar_detect, by = "incident_call_number") # 1 incident call number
 ```
 
 
-There are 6 (not 7) response numbers that appear in Medstar's legal compliance data, but not in the MedStar DETECT data. So, response number 15...93 is in the compliance data. It's also in the medstar_detect data. But, it is not in the medstar detect data that was paired with APS data.
+There is 1 (not 2) incident call numbers that appear in Medstar's legal compliance data, but not in the MedStar DETECT data. So, incident call number 1138 is in the compliance data. It's also in the medstar_detect data. But, it is not in the medstar detect data that was paired with APS data.
 
-Now we inspect the full record for response number 15...93 (results hidden to protect participant privacy). After inspection (code was deleted to protect participant privacy), it appears as though that person had a Dallas address. I also checked our APS data manually for that person's name. So, it appears as though the medic provided service in Dallas, completed a DETECT screening for that person, made a report to APS, and came back to MedStar and made the legal compliance department aware of the report to APS. However, because the data we received from APS does not include Dallas county, we are unable to pair that DETECT screening with an APS investigation.
+Now we inspect the full record for incident call number 1138 (results hidden to protect participant privacy). After inspection (code was deleted to protect participant privacy), it appears as though that person had a Dallas address. I also checked our APS data manually for that person's name. So, it appears as though the medic provided service in Dallas, completed a DETECT screening for that person, made a report to APS, and came back to MedStar and made the legal compliance department aware of the report to APS. However, because the data we received from APS does not include Dallas county, we are unable to pair that DETECT screening with an APS investigation.
 
 
 ## Count how many times those response numbers appear
@@ -442,9 +440,9 @@ semi_join returns all rows in MedStar's legal compliance data that have a match 
 medstar_detect_w_pair %>% 
   filter(
     incident_call_number %in% (
-      response_ids %>% 
-        semi_join(medstar_detect_w_pair, by = c("response_num" = "incident_call_number")) %>% 
-        pull(response_num)
+      medstar_compliance_deidentified %>% 
+        semi_join(medstar_detect_w_pair, by = "incident_call_number") %>% 
+        pull(incident_call_number)
     )
   ) %>% 
   arrange(incident_call_number) %>% 
@@ -462,20 +460,21 @@ Add a variable to the data to indicate if the response number in each row was al
 ```{r}
 medstar_detect_w_pair <- medstar_detect_w_pair %>% 
   mutate(
-    compliance_match = incident_call_number %in% pull(response_ids, response_num) %>% as.integer()
+    compliance_match = incident_call_number %in% 
+      pull(medstar_compliance_deidentified, incident_call_number)
   )
 
 about_data(medstar_detect_w_pair) # 132 observations and 47 variables
 ```
 
 ```{r}
-rm(response_ids)
+rm(medstar_compliance_deidentified)
 ```
 
 
 ## Summary
 
-There are 7 response numbers in the MedStar compliance data that don't appear in the MedStar DETECT screening items data that was matched to APS cases. I have an email from MedStar from 2016-10-10 outlining the discrepancy. One response id had all nulls for the DETECT screening items. One response id could not be found in the query. The rest were ineligible for the DETECT screening tool because of age.
+There are 2 incident call numbers in the MedStar compliance data that don't appear in the MedStar DETECT screening items data that was matched to APS cases. According to an email from MedStar from 2016-10-10, one incident call number (1882) had all nulls for the DETECT screening items. After inspection, it appears as though the other incident call number (1138) had a Dallas address.
 
 As expected, there are 7 matching response numbers in the MedStar DETECT screening items data that was matched to APS cases. However, those response numbers appear in 11 different rows. I manually inspected those rows and found two response numbers that appear twice and one response number that appears three times. We filter out duplicates below.
 
@@ -887,7 +886,7 @@ How many unique case numbers are in the APS client data matched to MedStar DETEC
 
 ```{r}
 append_aps_detect %>% 
-  summarise(`Unique Cases` = unique(case_num) %>% length())
+  summarise(`Unique Cases` = unique(case_num) %>% length()) # 41
 ```
 
 
