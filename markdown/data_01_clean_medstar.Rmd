@@ -51,7 +51,8 @@ In order to be consistent and reduce confusion, after importing the data below, 
 3. [Deidentifify incident call numbers and incident PCR numbers](deidentify)     
 4. [Add incident PCR number to MedStar DETECT data](#add-pcr)    
 5. [Merge the screening data with the demographics and health data](#merge)    
-6. [Save data for merge with APS data](#save)    
+6. [Create a unique person identifier](#person)     
+7. [Save data for merge with APS data](#save)    
 
 
 ```{r setup, include=FALSE}
@@ -399,7 +400,7 @@ medstar_demo %>%
   )
 ```
 
-The number of rows when grouped by incident PCR number and name (2,019) is the same as the number of unique incident PCR numbers. Therefore, each incident PCR number is associated with a single person. Again, however, any given person my have multiple incident PCR numbers if they were treated by MedStar more than once.
+The number of rows when grouped by incident PCR number and name (2,018) is the same as the number of unique incident PCR numbers. Therefore, each incident PCR number is associated with a single person. Again, however, any given person my have multiple incident PCR numbers if they were treated by MedStar more than once.
 
 
 ## Count rows, unique responses, and unique people
@@ -874,6 +875,21 @@ about_data(medstar_detect_demo) # 99,309 observations and 58 variables
 ```
 
 
+## Keep one last name variable
+
+Last name x looks like it has more complete information.
+
+```{r}
+medstar_detect_demo <- medstar_detect_demo %>% 
+  select(-last_name.y) %>% 
+  rename(last_name = last_name.x)
+```
+
+```{r}
+about_data(medstar_detect_demo) # 99,309 observations and 57 variables
+```
+
+
 ## Different ages
 
 (results hidden to protect participant privacy)
@@ -898,10 +914,63 @@ medstar_detect_demo <- medstar_detect_demo %>%
 ```
 
 ```{r}
-about_data(medstar_detect_demo) # 99,309 observations and 57 variables
+about_data(medstar_detect_demo) # 99,309 observations and 56 variables
 ```
 
 The demographics and health data is now linked to the DETECT screening data. There are some instances when more than one person was screened at a given incident. However, each incident PCR number is linked to a unique screening - if one exists.
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Create a unique person identifier {#person}
+
+-------------------------------------------------------------------------------
+
+Assuming first name, last name, and age uniquely identifies people in this data.
+
+```{r}
+medstar_detect_demo <- medstar_detect_demo %>%
+  mutate(person = paste(first_name, last_name, age, sep = "_"))
+```
+
+```{r}
+person_key <- medstar_detect_demo %>% 
+  select(person) %>% 
+  distinct() %>% # 1,775 rows
+  mutate(person_id = row_number())
+```
+
+```{r}
+medstar_detect_demo <- medstar_detect_demo %>% 
+  left_join(person_key, by = "person")
+```
+
+```{r}
+medstar_detect_demo <- medstar_detect_demo %>% select(-person)
+```
+
+```{r}
+rm(person_key)
+```
+
+
+## Data checks
+
+```{r}
+sum(is.na(medstar_detect_demo$person_id)) # 0
+```
+
+```{r}
+about_data(medstar_detect_demo) # 99,309 observations and 57 variables
+```
 
 
 
