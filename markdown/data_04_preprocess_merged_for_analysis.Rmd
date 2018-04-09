@@ -283,7 +283,7 @@ medstar_detect_demo <- medstar_detect_demo %>%
 medstar_detect_demo_deidentified <- medstar_detect_demo %>% 
   select(incident_pcr_number, age:current_meds, unusual_odor36:adls61, detect_data:crew_member_id)
 
-about_data(medstar_detect_demo_deidentified) # 99,309 observations and 39 variables
+about_data(medstar_detect_demo_deidentified) # 99,309 observations and 40 variables
 ```
 
 ```{r}
