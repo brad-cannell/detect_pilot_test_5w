@@ -8,9 +8,17 @@ output:
 
 # Overview
 
-The purpose of this analysis is just to describe the sample of older adults who were screened by MedStar using the DETECT tool during the phase 1 pilot test.
+The purpose of this analysis is just to explore some demographic characteristics of the sample of older adults who were screened by MedStar using the DETECT tool during the phase 1 pilot test. This is a larger pool of people than those screened with the DETECT tool _and_ investigated by APS.
 
-In this analysis, we start with the **medstar_detect_demo** data, which was created in **data_clean_medstar.Rmd**. 
+We start with the following data:
+
+* **medstar_detect_demo_deidentified.feather** - The demographics and health data linked to the DETECT screening data. There are some instances when more than one person was screened at a given incident. However, each incident PCR number is linked to a unique screening - if one exists. Data cleaned in data_01_clean_medstar.Rmd and deidentified in data_04_preprocess_merged_for_analysis.Rmd. 
+
+
+# Table of contents
+
+1. [Explore demographic characteristics of screened older adults](#demographics)    
+    
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(comment = NA)
@@ -19,62 +27,88 @@ Sys.setenv(TZ = "US/Central")
 
 ```{r load_packages, message=FALSE}
 library(tidyverse)
-library(feather)
 library(bfuncs)
 ```
 
+
 ```{r}
-medstar_detect_demo <- read_feather("/Users/bradcannell/Desktop/medstar_detect_demo.feather")
-about_data(medstar_detect_demo) # 99,309 observations and 56 variables
+medstar_detect_demo_deidentified <- feather::read_feather(
+  "../data/medstar_detect_demo_deidentified.feather"
+)
 ```
 
-# Keep records from older adults that were screened only
+```{r}
+about_data(medstar_detect_demo_deidentified) # 99,309 observations and 40 variables
+```
+
+&nbsp;
+
+
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------
+
+# Explore demographic characteristics of screened older adults {#demographics}
+
+-------------------------------------------------------------------------------
+
+**NOTE:** Here we explore age, gender and race of all older adults that were screened with the DETECT tool. This is a larger pool of people than those screened with the DETECT tool _and_ investigated by APS.
+
+## Keep only the rows in MedStar data that correspond to older adults who were screened with DETECT
 
 ```{r}
-screened_only <- medstar_detect_demo %>% 
+screened_only_deidentified <- medstar_detect_demo_deidentified %>% 
   filter(detect_data == 1)
-
-about_data(screened_only) # 64,059 observations and 56 variables
 ```
-
-Each row in this data is not a unique person. For the purposes of this analysis, we just want to describe the characteristics of unique people. Therefore, we will assume that first name, last name, and age uniquely identify people. Then, we will keep only the first instance of each.
 
 ```{r}
-screened_agr <- screened_only %>% 
-  mutate(person = paste(first_name, last_name, age, sep = "_")) %>%
-  group_by(person) %>% 
-  mutate(person_row = row_number()) %>% 
-  filter(person_row == 1) %>% # 1,141 matches data from data_clean_medstar.Rmd
-  ungroup() %>% 
-  select(age, gender, race)
-
-about_data(screened_agr) # 1,141 observations and 3 variables
+about_data(screened_only_deidentified) # 64,059 observations and 40 variables
 ```
+
+
+Each row in this data is not a unique person. For the purposes of this analysis, we just want to describe the characteristics of unique people.
+
+```{r}
+screened_only_deidentified <- screened_only_deidentified %>% 
+  group_by(person_id) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup()
+```
+
+```{r}
+about_data(screened_only_deidentified) # 1,141 observations and 40 variables
+```
+
 
 # Calculate some basic descriptives
 
 ```{r}
-screened_agr %>% 
+screened_only_deidentified %>% 
   mean_table(age)
 ```
 
 ```{r}
-screened_agr %>% 
+screened_only_deidentified %>% 
   group_by(gender) %>% 
   freq_table()
 ```
 
 ```{r}
-screened_agr %>% 
+screened_only_deidentified %>% 
   group_by(race) %>% 
   filter( !(race %in% c("Not Available", "Not Documented")) ) %>% 
   freq_table()
 ```
 
+[top](#top)
 
 &nbsp;
-
--------------------------------------------------------------------------------
 
 ```{r echo=FALSE}
 sessionInfo()
