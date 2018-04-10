@@ -35,6 +35,9 @@ library(tidyverse)
 library(bfuncs)
 ```
 
+
+# Load data
+
 ```{r}
 merged_screening_recoded_na_deidentified <- feather::read_feather(
   "../data/merged_screening_recoded_na_deidentified.feather"

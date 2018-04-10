@@ -31,6 +31,8 @@ library(bfuncs)
 ```
 
 
+# Load data
+
 ```{r}
 medstar_detect_demo_deidentified <- feather::read_feather(
   "../data/medstar_detect_demo_deidentified.feather"
