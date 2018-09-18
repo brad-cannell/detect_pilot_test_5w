@@ -6,29 +6,29 @@ output:
     css: custom-css.css
 ---
 
-# Overview
+# Table of contents
 
-In this file, we do quick cleaning and an analysis of the APS reporting data we received from MedStar's legal compliance department. Specifically, the input data set is called:
+* [Overview](#overview)   
+* [Load packages](#load)   
+* [Exploratory data analysis](#eda)   
+* [Figure 1. MedStar reports to APS by month](#figure1)   
+* [Summary](#summary)    
 
-* APS Report Data_UNTHSC_IRB.xlsx
+
+# Overview {#overview}
+
+In this file, we analyze the APS reporting data we received from MedStar's legal compliance department.
 
 Figure 1, below, illustrates MedStar’s current standard operating procedure for reporting suspected elder abuse and neglect. In the first step, the medic responds to a 911 call. He or she must use their experience and subjective judgement alone to determine if they believe elder abuse or neglect may be occurring. If they suspect elder abuse is occurring, they are required by [Texas law](https://www.txabusehotline.org/Login/Default.aspx), and MedStar’s standard operating procedure, to report the suspected abuse to [Texas’ statewide intake](https://www.dfps.state.tx.us/Contact_Us/report_abuse.asp). They can make this report over the phone, or using an online web form. Finally, if the medic reports suspected elder abuse or neglect to APS, the procedure is for them to let the MedStar legal compliance department know that the report was made. Of course, at each of these steps there is the potential for a breakdown in the process.
 
 During the pilot study, all MedStar medics were given access to the pilot version of the DETECT screening tool through their Electronic Patient Care Reporting system (ePCR). In this analysis, we investigate all reports to APS in 2015 that were reported to the MedStar legal compliance department. We are primarily interested evaluating whether or not reports increased during the period of time that the pilot test occurred.
 
-**Figure 1.** Current medic reporting procedure.   
+**Figure 1.** Current medic reporting procedure.    
 
 ![](../images/old_report_sop.png)
 
 
-# Table of contents
-
-1. [Import and clean the DETECT reporting data](#data)     
-2. [Exploratory data analysis](#eda)   
-3. [DETECT pilot response id's](#detect-ids)   
-4. [Tables and Figures](#tables-figures)   
-5. [Summary](#summary)    
-6. [Save deidentified data](#save)
+# Load packages and data {#load}
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(comment = NA)
@@ -43,75 +43,15 @@ library(bfuncs)
 ```
 
 
+## Load data
 
-
-
-
-
-
-
-
--------------------------------------------------------------------------------
-
-# Import and clean the DETECT reporting data {#data}
-
--------------------------------------------------------------------------------
+Reporting data from MedStar's compliance department. Cleaned in data_medstar_compliance_01_import.Rmd
 
 ```{r}
-col_info <- c( 
-# "col_name",     "col_type"
-  "agency",       "text",
-  "confim_num",   "text",
-  "created",      "date",
-  "reported",     "date",
-  "electronic",   "text",
-  "phone",        "text",
-  "response_num", "text")
-
-# Import data
-medstar_aps <- read_excel(
-  path = "/Users/bradcannell/Desktop/APS Report Data_UNTHSC_IRB.xlsx",
-  sheet = "owssvr",
-  col_names = col_info[seq(1, length(col_info), 2)],
-  col_types = col_info[seq(2, length(col_info), 2)],
-  skip = 1) %>% 
-  arrange(reported)
-
-about_data(medstar_aps) # 137 observations and 7 variables in the data
+medstar_compliance <- feather::read_feather("/Volumes/sph_research/Detect/medstar_compliance.feather")
 ```
 
 
-## Remove all the CPS cases
-
-```{r}
-medstar_aps <- filter(medstar_aps, agency == "APS")
-about_data(medstar_aps) # 93 observations and 7 variables in the data 
-```
-
-
-## Remove 2016 cases
-
-```{r}
-medstar_aps <- filter(medstar_aps, reported <= as.POSIXct("2016-01-01"))
-about_data(medstar_aps) # 49 observations and 7 variables in the data
-```
-
-
-## Identify DETECT pilot period
-
-```{r}
-start <- as.POSIXct("2015-09-17")
-end   <- as.POSIXct("2015-10-26")
-
-medstar_aps <- medstar_aps %>%
-  mutate(
-    detect_pilot = (reported >= start & reported <= end)
-  )
-```
-
-At this point, the medstar_aps data contains 49 observations and 7 variables. All remaining reports were made to APS during the 2015 calendar year.
-
-[top](#top)
 
 
 
@@ -119,34 +59,50 @@ At this point, the medstar_aps data contains 49 observations and 7 variables. Al
 
 
 
-
-
-
--------------------------------------------------------------------------------
 
 # Exploratory data analysis {#eda}
 
--------------------------------------------------------------------------------
+## Total reports in 2015
+
+```{r}
+nrow(medstar_compliance) # 49
+```
+
+
+## Number of reports during DETECT pilot
+
+```{r}
+medstar_compliance %>% 
+  filter(detect_pilot == TRUE) %>% 
+  nrow() # 14
+```
+
 
 ## Calculate time difference
 
 Here we calculate the difference in days between the variables reported (to APS) and created (recorded with MedStar compliance).
 
 ```{r}
-medstar_aps <- medstar_aps %>%
+medstar_compliance <- medstar_compliance %>%
   mutate(
-    report_interval = interval(reported, created),
-    interval_days   = report_interval / ddays()
+    report_interval = lubridate::interval(reported, created),
+    interval_days   = report_interval / lubridate::ddays()
   )
 ```
 
+Update 2018-09-11: dplyr does not currently support lubridate periods and intervals. Leaving the report interval column in the data causes data management problems later. Dropping it here.
 
-## Mean
+```{r}
+medstar_compliance <- select(medstar_compliance, -report_interval)
+```
+
+
+## Days between report and compliance
 
 Mean and maximum number of days between the report to APS and a record of that report appearing in the MedStar compliance data:
 
 ```{r mean_max}
-medstar_aps %>% 
+medstar_compliance %>% 
   summarise(
     `Mean Days` = mean(interval_days) %>% round(1), # 3.5
     `Max Days`  = max(interval_days) %>% round() # 22
@@ -154,29 +110,22 @@ medstar_aps %>%
 ```
 
 
-## Number of reports during DETECT pilot
-
-```{r}
-medstar_aps %>% 
-  filter(detect_pilot == TRUE) %>% 
-  count()
-```
-
-
 ## Group by day and count number of reports
 
-```{r}
-medstar_reports_by_day <- medstar_aps %>% 
+```{r eval=FALSE}
+medstar_reports_by_day <- medstar_compliance %>% 
   group_by(reported) %>% 
   count() %>% 
   print()
 ```
 
+Results  hidden to protect participant privacy.
+
 
 ## Group by month and count number of reports
 
 ```{r rows.print=12}
-medstar_reports_by_month <- medstar_aps %>% 
+medstar_reports_by_month <- medstar_compliance %>% 
   mutate(month = format(reported, "%m")) %>% 
   group_by(month) %>%
   count() %>%
@@ -214,7 +163,7 @@ medstar_reports_by_month %>%
 ## Distribution of reporting mode (phone / electronic / both)
 
 ```{r}
-medstar_aps %>% 
+medstar_compliance %>% 
   summarise(
     `Phone Only`      = sum(phone == "Yes" & electronic == "No"), # 33
     `Electronic Only` = sum(phone == "No" & electronic == "Yes"), # 12
@@ -233,71 +182,24 @@ medstar_aps %>%
 
 
 
--------------------------------------------------------------------------------
+# Figure 1. MedStar reports to APS by month {#figure1}
 
-# DETECT pilot response id's {#detect-ids}
-
--------------------------------------------------------------------------------
-
-These are the response id numbers that correspond to 911 responses where a report was made to APS during the DETECT pilot phase, and MedStar compliance was made aware of the report.
-
-```{r response_id}
-response_ids <- medstar_aps %>% 
-  filter(reported >= start & reported <= end) %>% 
-  select(response_num)
-
-nrow(response_ids) # 14
-```
-
-There were 14 response id's with a report date between 2015-09-17 and 2015-10-26 in the data from MedStar compliance.
-
-
-## Save response id's
-
-We will look for these response id's in the DETECT screening data as well.
-
-```{r}
-feather::write_feather(response_ids, "/Users/bradcannell/Desktop/response_ids.feather")
-```
-
-[top](#top)
-
-
-
-
-
-
-
-
-
-
--------------------------------------------------------------------------------
-
-# Tables and Figures {#tables-figures}
-
--------------------------------------------------------------------------------
-
-
-## Table 1. MedStar reports to APS by month
-
-```{r rows.print=12}
-medstar_reports_by_month %>% 
-  rename(Month = month, `Number of Reports` = n)
-```
+## Preliminary variable management
 
 ### Count number of reports by day
 
 ```{r}
-reports_date <- medstar_aps %>%
+reports_date <- medstar_compliance %>%
   group_by(reported) %>%
   count() %>%
   rename(count_date = n)
 ```
 
+
 ### Count number of reports by month
 
 ```{r}
-reports_month <- medstar_aps %>% 
+reports_month <- medstar_compliance %>% 
   mutate(month = format(reported, "%m")) %>%
   group_by(month) %>%
   count() %>% 
@@ -322,6 +224,7 @@ reports_month <- medstar_aps %>%
     tag = 1
   )
 ```
+
 
 ### Merge reports_date and reports_month
 
@@ -353,8 +256,7 @@ reports_merge %>%
 ```
 
 
-
-## Figure 2. MedStar reports to APS by month
+## Create figure
 
 ```{r}
 fig_medstar_reports_to_aps_2015 <- ggplot() +
@@ -408,7 +310,7 @@ fig_medstar_reports_to_aps_2015
 2. The blue rug plot shows the marginal distribution of individual reports to APS. 
 
 
-## Save Figure 2 to file
+## Save Figure to file
 
 ```{r}
 ggsave(
@@ -433,13 +335,11 @@ ggsave(
 
 
 
--------------------------------------------------------------------------------
-
 # Summary {#summary}
 
 -------------------------------------------------------------------------------
 
-In 2015, there were 49 total reports to APS that MedStar's compliance office was made aware of (Table 1). On average, MedStar compliance was made aware of reports 3.5 days after they occurred; however, in some cases MedStar compliance was not informed of the report for 22 days.
+In 2015, there were 49 total reports to APS that MedStar's compliance office was made aware of. On average, MedStar compliance was made aware of reports 3.5 days after they occurred; however, in some cases MedStar compliance was not informed of the report for 22 days.
 
 The DETECT screening tool was used in MedStar's EPCR from 2015-09-17 to 2015-10-26. **During that time 14 reports were made to APS.** January had the lowest number of reports (0), and October had the highest number of reports (13). Of the 49 total reports, 33 were made by phone only, 12 were made electronically only, and 4 were made by phone and electronically.
 
@@ -448,56 +348,11 @@ The DETECT screening tool was used in MedStar's EPCR from 2015-09-17 to 2015-10-
 
 The primary limitation here is that we are unable to determine if reports to APS increased generally, or if reports to APS remained constant, and only the proportion of reports that compliance was made aware of increased.
 
-
-
-
-
-
-
-
-
-
--------------------------------------------------------------------------------
-
-# Save deidentified data {#save}
-
--------------------------------------------------------------------------------
-
-## Remove identifiers
-
-Remove identifiers from the APS reporting data we received from MedStar's legal compliance department so that it can be uploaded to [NACJD]( https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html)
-
-* As part of the process of protecting participant anonymity, we will remove the day from all dates.
-
-```{r}
-medstar_compliance_deidentified <- medstar_aps %>%
-  select(created, reported, electronic, phone, detect_pilot) %>% 
-  mutate(
-    created  = format(created, "%Y-%m"),
-    reported = format(reported, "%Y-%m")
-  )
-```
-
-
-## Save deidentified data
-
-* Save one copy in feather format for me.
-
-* Save a second copy in CSV format for NACJD.
-
-```{r}
-feather::write_feather(
-  medstar_compliance_deidentified, 
-  "../data/medstar_compliance_deidentified.feather"
-)
-readr::write_csv(
-  medstar_compliance_deidentified,
-  "../data/medstar_compliance_deidentified.csv"
-)
-```
-
 [top](#top)
 
+&nbsp;
+
+-------------------------------------------------------------------------------
 
 ```{r session_info, echo=FALSE}
 sessionInfo()

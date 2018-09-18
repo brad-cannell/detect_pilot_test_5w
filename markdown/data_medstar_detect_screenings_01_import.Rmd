@@ -1,0 +1,389 @@
+---
+title: "Import MedStar DETECT Screening Items Data"
+date: "Created: 2016-09-09 <br> Updated: `r Sys.Date()`"
+output: 
+  html_notebook:
+    css: custom-css.css
+---
+
+# Table of contents
+
+* [Overview](#overview)   
+* [Load packages and data](#load)   
+* [Import DETECT screening items data](#import)      
+* [Check for duplicate records](#duplicates)   
+* [Preliminary variable management](#pvm)   
+* [Check for id's from compliance data](#compliance)   
+* [Count rows, unique responses, and unique people](#counts)   
+* [Save current version of the DETECT screening items data](#save)   
+
+
+# Overview {#overview}
+
+In this file we import the data sent to us by MedStar that includes every DETECT screening they completed during the 5-week pilot test. Specifically, the input data set is called:
+
+* DETECT_DATA_PIVOT.xlsx
+
+Additionally, in order to be consistent and reduce confusion, we will use the terminology from the MedStar demographics and health data. Specifically, we:
+
+    * Rename response number to incident call number   
+    * Add incident PCR number to the data   
+
+
+# Load packages and data {#load}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+Sys.setenv(TZ = "US/Central")
+```
+
+```{r load_packages, message=FALSE}
+library(tidyverse)
+library(bfuncs)
+```
+
+
+## Load MedStar compliance data
+
+Imported and cleaned in data_medstar_compliance_01_import.Rmd
+
+```{r}
+response_ids <- feather::read_feather("/Volumes/sph_research/Detect/response_ids.feather")
+```
+
+
+
+
+
+
+
+
+
+
+# Import DETECT screening items data {#import}
+
+```{r}
+col_info <- c( 
+  # "col_name",             "col_type"
+  "response_num",           "text",
+  "response_date",          "date",
+  "aps_report_num",         "text",
+  "full_name",              "text",
+  "address",                "text",
+  "city",                   "text",
+  "state",                  "text",
+  "zip",                    "text",
+  "dob",                    "date",
+  "age",                    "numeric",
+  "unusual_odor36",         "text",
+  "no_utils37",             "text",
+  "hoarding38",             "text",
+  "safe_env39",             "text",
+  "alc_containers40",       "text",
+  "cg_lack_know41",         "text",
+  "cg_unengaged42",         "text",
+  "cg_frustrated43",        "text",
+  "cg_overwhelmed44",       "text",
+  "cg_too_conerned45",      "text",
+  "cg_deceptive46",         "text",
+  "cg_bad_info47",          "text",
+  "cg_alcdrugs48",          "text",
+  "cg_dependent49",         "text",
+  "socsup50",               "text",
+  "no_talk51",              "text",
+  "isolated52",             "text",
+  "suspicious_injuries53",  "text",
+  "old_injuries54",         "text",
+  "alcdrugs55",             "text",
+  "emo_distress56",         "text",
+  "poor_hygiene57",         "text",
+  "clothing58",             "text",
+  "taking_meds59",          "text",
+  "saving_meds60",          "text",
+  "adls61",                 "text")
+
+# Import data
+medstar_detect <- readxl::read_excel(
+  path = "/Volumes/sph_research/Detect/DETECT_DATA_PIVOT.xlsx",
+  col_names = col_info[seq(1, length(col_info), 2)],
+  col_types = col_info[seq(2, length(col_info), 2)],
+  skip = 1)
+rm(col_info)
+```
+
+```{r}
+about_data(medstar_detect) # 1,248 observations and 36 variables in the data
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Check for duplicate records {#duplicates}
+
+## Check for entire duplicate rows
+
+```{r}
+medstar_detect %>% 
+  group_by_all() %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n)
+```
+
+151003... Appears to have a duplicate row. Will drop.
+
+```{r}
+medstar_detect <- medstar_detect %>% 
+  group_by_all() %>% 
+  mutate(
+    count = row_number(), # Counts rows by group
+    dup   = count > 1     # TRUE if there is more than one row per group
+  ) %>% 
+  filter(!dup) %>% 
+  select(-count, -dup) %>% 
+  ungroup()
+```
+
+```{r}
+about_data(medstar_detect) # 1,247 observations and 36 variables
+```
+
+
+## Check for duplicate response numbers
+
+```{r}
+medstar_detect %>% 
+  group_by(response_num) %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n) # 2 sets of duplicates (4 rows)
+```
+
+
+151011... Includes information about two people. A man and a woman with the same last name. Both over age 65. Keep both rows because they are not duplicates of each other. They are two separate screenings that occurred at a single 911 response.
+
+151024... Includes information about two people. A man and a woman with the same last name. Both over age 65. Keep both rows because they are not duplicates of each other. They are two separate screenings that occurred at a single 911 response.
+
+```{r}
+about_data(medstar_detect) # "1,247 observations and 36 variables"
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Preliminary variable management {#pvm}
+
+## Standardize character strings
+
+Because we will merge this data with other data sets in the future based on character strings (e.g., name, address), we need to go ahead and standardize their formats here. This will prevent mismatches during the merges. Specifically, we:
+
+1. Transform all characters to lower case   
+2. Remove any special characters (e.g., hyphens, periods)   
+3. Remove trailing spaces (e.g., "John Smith ")   
+4. Remove double spaces (e.g., "John  Smith")  
+
+```{r eval=FALSE}
+# Examples for data checking
+# medstar_detect %>% 
+#   select(response_num, full_name, address) %>% 
+#   filter(
+#     # Special characters other than spaces
+#     stringr::str_detect(full_name, "[^a-zA-Z\\d\\s]") |
+#     stringr::str_detect(address, "[^a-zA-Z\\d\\s]") |
+#       
+#     # Trailing space
+#     stringr::str_detect(full_name, "[[:blank:]]$") |
+#     stringr::str_detect(address, "[[:blank:]]$") |
+#       
+#     # Double (or more) space
+#     stringr::str_detect(full_name, "[[:blank:]]{2,}") |
+#     stringr::str_detect(address, "[[:blank:]]{2,}")
+#   )
+```
+
+```{r}
+vars <- quos(full_name, address)
+
+medstar_detect <- medstar_detect %>% 
+  mutate_at(vars(!!! vars), tolower) %>% 
+  mutate_at(vars(!!! vars), stringr::str_replace_all, "[^a-zA-Z\\d\\s]", " ") %>%
+  mutate_at(vars(!!! vars), stringr::str_replace, "[[:blank:]]$", "") %>% 
+  mutate_at(vars(!!! vars), stringr::str_replace_all, "[[:blank:]]{2,}", " ")
+```
+
+
+
+## Separate name, address, and date of birth into multiple fields
+
+Some first names actually have two parts (e.g., Mary Jo). Later, when we merge the DETECT screening data with the demographics and health data, we do so by incident call number and first name. Failing to split up two parts of the first name here prevents the merge from completing as desired.
+
+```{r}
+medstar_detect <- medstar_detect %>%
+  mutate(
+    n_spaces_in_name = stringr::str_count(full_name, "[[:blank:]]"),
+    first_name       = stringr::str_extract(full_name, "\\w+(?=[[:blank:]])"),
+    first_name_02    = if_else(n_spaces_in_name == 1, 
+                         NA_character_, 
+                         stringr::str_extract(full_name, "(?<=[[:blank:]])\\w+")),
+    last_name        = stringr::str_extract(full_name, "\\S*$"),
+    birth_mnth       = lubridate::month(dob),
+    birth_day        = lubridate::day(dob),
+    birth_year       = lubridate::year(dob),
+    address_num      = stringr::str_extract(address, "^\\d{1,5}"),
+    address_street   = stringr::str_trim(str_replace(address, "^\\d{1,5}", ""))
+  ) %>% 
+  select(-n_spaces_in_name)
+```
+
+
+## Set all "NULL" values to NA   
+
+```{r}
+medstar_detect <- medstar_detect %>%
+  mutate_if(is.character, ~ {.[. == "NULL"] <- NA; .})
+```
+
+
+## Coerce selected character vectors (screening questions) to factors
+
+```{r}
+medstar_detect <- medstar_detect %>%
+  mutate_at(vars(unusual_odor36:adls61), factor)
+```
+
+
+## Add a dataset identifier tag
+
+Adding a variable that will allow me to tell which rows had a DETECT screening tool use (even if all NA) after I merge this data with the demographics data below.
+
+```{r}
+medstar_detect$detect_data <- 1
+```
+
+
+## Rename response number
+
+In order to be consistent and reduce confusion, we will use the terminology from the MedStar demographics and health data.
+
+**Response number** is unique to the incident/response (#2 in the diagram). In cases where there was more than one person screened at an incident/response, the response number is not unique to the person/screening (#3 and #4 in the diagram). This number matches incident call number in the MedStar demographics and health data.
+
+**Incident call number** is unique to the incident/response (#2 in the diagram). In cases where there was more than one person screened at an incident/response, the incident call number is not unique to the person/screening (#3 and #4 in the diagram). This number matches response number in DETECT screening data.
+
+![](../images/medstar_detect_identifiers.png)
+
+```{r}
+medstar_detect <- medstar_detect %>% rename(incident_call_number = response_num)
+```
+
+```{r}
+about_data(medstar_detect) # 1,247 observations and 45 variables
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Check for id's from compliance data {#compliance}
+
+Check to see if all the response id's from the MedStar compliance data exist in the current data.   
+
+```{r eval=FALSE}
+response_ids %>% 
+  anti_join(medstar_detect, by = c("response_num" = "incident_call_number")) %>%  # 6 response numbers
+  unique()
+```
+
+
+There are 6 responses id's in the MedStar compliance data that don't appear in the MedStar DETECT screening items data (results hidden to protect participant privacy). I have an email from MedStar from 2016-10-10 outlining the discrepancy. One response id had all nulls for the DETECT screening items. One response id could not be found in the query. The rest were ineligible for the DETECT screening tool because of age.
+
+At this point, there should be 8 response id's from the compliance data that have a match in the DETECT screening tool data (results hidden to protect participant privacy).
+
+```{r eval=FALSE}
+response_ids %>% 
+  semi_join(medstar_detect, by = c("response_num" = "incident_call_number")) %>%  # 8 response numbers
+  unique()
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Count rows, unique responses, and unique people {#counts}
+
+## IMPORTANT NOTE: 
+
+_The count of unique people is not correct. Creating a unique identifier based on name a date of birth is complicated by data entry errors (i.e., misspelled names and mistyped dates of birth). We get an accurate count in a later analysis code file. I'm only leaving it here for instructional purposes._
+
+```{r}
+medstar_detect %>% 
+  mutate(person = paste(full_name, dob)) %>% 
+  group_by(incident_call_number, full_name) %>% 
+  mutate(response_names = paste(incident_call_number, full_name)) %>%  
+  ungroup() %>% 
+  summarise(
+    `Total Rows` = n() %>% format(big.mark = ","),
+    `Unique 911 Responses` = unique(incident_call_number) %>% length() %>% format(big.mark = ","),
+    `Unique Response And Name` = unique(response_names) %>% length() %>% format(big.mark = ","),
+    `Unique People` = unique(person) %>% length() %>% format(big.mark = ",")
+  )
+```
+
+So, the MedStar detect screening data contains 1,247 total rows of data that correspond to 1,245 911 responses, 1,247 unique response/name combinations, and 1,139 unique people (assuming first name, last name, and age uniquely identifies people in this data).
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Save current version of the DETECT screening items data {#save}
+
+```{r}
+feather::write_feather(medstar_detect, "/Volumes/sph_research/Detect/medstar_detect.feather")
+```
+
+[top](#top)
+
+&nbsp;
+
+
+```{r echo=FALSE}
+sessionInfo()
+```

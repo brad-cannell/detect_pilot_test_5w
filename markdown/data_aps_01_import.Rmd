@@ -6,7 +6,19 @@ output:
     css: custom-css.css
 ---
 
-# Overview
+# Table of contents
+
+* [Overview](#overview)   
+* [Key variable definitions](#key)   
+* [Load packages and data](#load)   
+* [Import APS client info data](#client-info)      
+* [Import APS allegations data](#allegations)    
+* [Import APS closure reason](#closure)      
+* [Import APS disposition data](#disposition)     
+* [Save data for merge with MedStar data](#save)     
+
+
+# Overview {#overview}
 
 The DETECT screening tool was pilot tested between 2015-09-17 and 2015-10-26. On 2016-08-31 APS securely transmitted data containing records of all elder abuse and neglect investigations conducted in MedStar's service area between 2015-09-17 and 2015-11-05. Specifically, the name of the data set received from APS is:
 
@@ -15,7 +27,7 @@ The DETECT screening tool was pilot tested between 2015-09-17 and 2015-10-26. On
 Below we clean this data and prepare it for further analysis.
 
 
-# Key variable definitions 
+# Key variable definitions {#key}
 
 It's important to understand the meaning of patient, and perpetrator, identification variables in the data. Additonally, it's important to understand these identifiers are related across the various sheets of the Excel file that APS sent us. The following diagram shows how people are identified in the MedStar data:
 
@@ -34,13 +46,7 @@ It's important to understand the meaning of patient, and perpetrator, identifica
     - An intake is the submission or receipt of a report of abuse - a phone call or web-based. The Intake Start Date refers to the date the staff member opens a new record to begin recording the report. In the case of a phone call they have picked up from a caller on the abuse hotline, the intake starts when the Intake worker begins to speak to the individual, open the record and begin recording what they are hearing. In the case of reports made using the web-based system, intake begins when the Intake worker pulls the web-report and begins processing it in the system. There is the possibility that the intake may begin on one day but not end until the next day.
 
 
-# Table of contents
-
-1. [Import APS client info data](#client-info)      
-2. [Import APS allegations data](#allegations)    
-3. [Import APS closure reason](#closure)      
-4. [Import APS disposition data](#disposition)     
-5. [Save data for merge with screening data](#save)     
+# Load packages and data {#load}
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(comment = NA)
@@ -64,11 +70,11 @@ library(bfuncs)
 
 
 
--------------------------------------------------------------------------------
-
 # Import APS client info data {#client-info}   
 
--------------------------------------------------------------------------------
+```{r}
+path <- "/Volumes/sph_research/Detect/APS In-Home Intakes of Clients Age 65 or Over in Denton Johnson or Tarrant Counties.xlsx"
+```
 
 The client info data contains patient identifiers.
 
@@ -89,8 +95,6 @@ col_info <- c(
   "city",         "text",
   "zip",          "text")
 
-path <- "/Users/bradcannell/Desktop/APS In-Home Intakes of Clients Age 65 or Over in Denton Johnson or Tarrant Counties.xlsx"
-
 # Import data
 client_data <- read_excel(
   path = path,
@@ -99,7 +103,7 @@ client_data <- read_excel(
   col_types = col_info[seq(2, length(col_info), 2)],
   skip = 6)
 
-rm(col_info, path)
+rm(col_info)
 
 about_data(client_data) # 747 observations and 13 variables
 ```
@@ -141,7 +145,6 @@ There are **747 observations and 13 variables** in the APS client info data.
 
 [top](#top)
 
-&nbsp;
 
 
 
@@ -150,13 +153,8 @@ There are **747 observations and 13 variables** in the APS client info data.
 
 
 
-
-
--------------------------------------------------------------------------------
 
 # Import APS [allegations](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_1340.asp#APS_1340) data {#allegations}
-
--------------------------------------------------------------------------------
 
 The allegations data contains information about the allegation type(s) for each case and the perpetrator (self/other) for each allegation.
 
@@ -172,7 +170,7 @@ col_info <- c(
 
 # Import data
 allegations <- read_excel(
-  path = "/Users/bradcannell/Desktop/APS In-Home Intakes of Clients Age 65 or Over in Denton Johnson or Tarrant Counties.xlsx",
+  path = path,
   sheet = "Allegations",
   col_names = col_info[seq(1, length(col_info), 2)],
   col_types = col_info[seq(2, length(col_info), 2)],
@@ -273,14 +271,13 @@ allegations <- allegations %>%
   filter(!dup) %>% 
   select(case_num:perp)
 
-about_data(allegations)
+about_data(allegations) # 1,051 observations and 4 variables
 ```
 
 There are **1,051 observations and 4 variables** in the APS allegations data.
 
 [top](#top)
 
-&nbsp;
 
 
 
@@ -289,13 +286,8 @@ There are **1,051 observations and 4 variables** in the APS allegations data.
 
 
 
-
-
--------------------------------------------------------------------------------
 
 # Import APS [closure reason](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2800.asp#APS_2900) data {#closure} 
-
--------------------------------------------------------------------------------
 
 ```{r import_closure_reason}
 col_info <- c( 
@@ -306,7 +298,7 @@ col_info <- c(
 
 # Import data
 closure <- read_excel(
-  path = "/Users/bradcannell/Desktop/APS In-Home Intakes of Clients Age 65 or Over in Denton Johnson or Tarrant Counties.xlsx",
+  path = path,
   sheet = "Closure Reason",
   col_names = col_info[seq(1, length(col_info), 2)],
   col_types = col_info[seq(2, length(col_info), 2)],
@@ -314,7 +306,7 @@ closure <- read_excel(
 
 rm(col_info)
 
-about_data(closure)
+about_data(closure) # 747 observations and 3 variables
 ```
 
 
@@ -341,14 +333,13 @@ closure %>%
 ```
 
 ```{r}
-about_data(closure)
+about_data(closure) # 747 observations and 3 variables
 ```
 
 There are **747 observations and 3 variables** in the APS closure reason data
 
 [top](#top)
 
-&nbsp;
 
 
 
@@ -357,13 +348,8 @@ There are **747 observations and 3 variables** in the APS closure reason data
 
 
 
-
-
--------------------------------------------------------------------------------
 
 # Import APS [disposition](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2700.asp#APS_2700) data {#disposition}   
-
--------------------------------------------------------------------------------
 
 ```{r import_allegation_disposition}
 col_info <- c( 
@@ -376,7 +362,7 @@ col_info <- c(
 
 # Import data
 disposition <- read_excel(
-  path = "/Users/bradcannell/Desktop/APS In-Home Intakes of Clients Age 65 or Over in Denton Johnson or Tarrant Counties.xlsx",
+  path = path,
   sheet = "Allegation Disposition",
   col_names = col_info[seq(1, length(col_info), 2)],
   col_types = col_info[seq(2, length(col_info), 2)],
@@ -466,7 +452,7 @@ disposition <- disposition %>%
   filter(!dup) %>% 
   select(case_num:disposition)
 
-about_data(disposition)
+about_data(disposition) # 1,128 observations and 5 variables
 ```
 
 There are **1,128 observations and 5 variables** in the APS disposition data.
@@ -505,7 +491,6 @@ The perpetrator id is tied to a person and is reused across cases.
 
 [top](#top)
 
-&nbsp;
 
 
 
@@ -515,26 +500,19 @@ The perpetrator id is tied to a person and is reused across cases.
 
 
 
-
--------------------------------------------------------------------------------
-
-# Save data for merge with screening data {#save}
-
--------------------------------------------------------------------------------
+# Save data for merge with MedStar data {#save}
 
 ```{r}
-feather::write_feather(client_data, "/Users/bradcannell/Desktop/client_data.feather")
-feather::write_feather(allegations, "/Users/bradcannell/Desktop/allegations.feather")
-feather::write_feather(closure, "/Users/bradcannell/Desktop/closure.feather")
-feather::write_feather(disposition, "/Users/bradcannell/Desktop/disposition.feather")
+feather::write_feather(client_data, "/Volumes/sph_research/Detect/client_data.feather")
+feather::write_feather(allegations, "/Volumes/sph_research/Detect/allegations.feather")
+feather::write_feather(closure, "/Volumes/sph_research/Detect/closure.feather")
+feather::write_feather(disposition, "/Volumes/sph_research/Detect/disposition.feather")
 ```
 
 [top](#top)
 
 &nbsp;
 
-
 ```{r session_info, echo=FALSE}
 sessionInfo()
 ```
-

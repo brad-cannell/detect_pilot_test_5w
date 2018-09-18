@@ -25,13 +25,14 @@ We start with the following data:
     1. Create an **any_valid** variable            
     2. Recode DETECT responses to NA    
     
-2. [Create a deidentified version of datasets](#deidentify)    
+2. [Create a unique person identifier in merged data](#person-id)     
+    
+3. [Create a deidentified version of datasets](#deidentify)    
     1. medstar_demo    
     2. medstar_detect_demo   
     3. merged     
-        - Create unique person identifier     
 
-3. [Save processed/deidentified data](#save)      
+4. [Save processed/deidentified data](#save)      
     1. medstar_demo_deidentified.feather     
     2. medstar_demo_deidentified.csv     
     3. medstar_detect_demo_deidentified.feather     
@@ -239,6 +240,115 @@ about_data(merged_screening_recoded_na) # 67 observations and 52 variables
 
 -------------------------------------------------------------------------------
 
+# Create a unique person identifier in merged data {#person-id}
+
+-------------------------------------------------------------------------------
+
+**First Attempt:** Assuming first name, last name, and date of birth uniquely identifies people in this data.
+
+```{r}
+merged_screening_recoded_na <- merged_screening_recoded_na %>%
+  mutate(person = paste(first_name, last_name, dob, sep = "-"))
+```
+
+```{r}
+person_key <- merged_screening_recoded_na %>% 
+  select(person) %>% 
+  distinct() %>% # 40 rows
+  mutate(person_id = row_number())
+```
+
+```{r}
+merged_screening_recoded_na <- merged_screening_recoded_na %>% 
+  left_join(person_key, by = "person")
+```
+
+```{r}
+rm(person_key)
+```
+
+
+**Problem:** Unlike renumbering incident number, incident PCR number, perpetrator id, and crew id, creating a unique identifier based on name a date of birth is made more complicated by data entry errors (i.e., misspelled names and mistyped dates of birth). See an example below (results hidden to protect participant privacy).
+
+```{r eval=FALSE}
+merged_screening_recoded_na %>% 
+  filter(incident_pcr_number %in% c(1301, 828, 1426)) %>% 
+  select(person, person_id)
+```
+
+
+## Using the RecordLinkage package to find probabilistic matches
+
+```{r eval=FALSE}
+merged_screening_recoded_na %>% 
+  select(first_name, last_name, birth_mnth, birth_day, birth_year) %>% # 67 rows
+  mutate(unique_spellings_dob = 
+           paste(first_name, last_name, birth_mnth, birth_day, birth_year, sep = "_")
+  ) %>% 
+  distinct(unique_spellings_dob, .keep_all = TRUE) %>% # 40 rows
+  arrange(unique_spellings_dob)
+```
+
+In rows 6 and 7, Mr/Ms G has the same first name and DOB, but one version of the last name ends with a Z and the other version ends with an S. This is almost certainly the same person.
+
+```{r eval=FALSE}
+test <- merged_screening_recoded_na %>% 
+  select(first_name, last_name, birth_mnth, birth_day, birth_year) %>% # 67 rows
+  mutate(unique_spellings_dob = 
+           paste(first_name, last_name, birth_mnth, birth_day, birth_year, sep = "_")
+  ) %>% 
+  distinct(unique_spellings_dob, .keep_all = TRUE) %>% # 40 rows
+  arrange(unique_spellings_dob) %>% 
+  select(-unique_spellings_dob)
+```
+
+```{r}
+rpairs_jar <- RecordLinkage::compare.dedup(
+  dataset   = test, 
+  strcmp    = c("first_name", "last_name")
+)
+```
+
+```{r}
+rpairs_epiwt <- RecordLinkage::epiWeights(rpairs_jar)
+```
+
+```{r eval=FALSE, rows.print=50}
+weighted_pairs <- RecordLinkage::getPairs(rpairs_epiwt, max.weight = Inf, min.weight = 0.5)
+weighted_pairs
+```
+
+At this point, we can see that rows 6 and 7 are probably matches.
+
+Figure out how to get that info back into the full data frame.
+
+# Left off here...
+
+```{r}
+
+```
+
+
+Then give a unique number to each person.
+
+clean all this up and make more efficient.
+
+
+[top](#top)
+
+&nbsp;
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
 # Create a deidentified version of datasets {#deidentify}
 
 -------------------------------------------------------------------------------
@@ -294,48 +404,9 @@ rm(crew_key)
 
 ## Create deidentified version of merged_screening_recoded_na
 
-First, create a unique person identifier.
-
-Assuming first name, last name, and date of birth uniquely identifies people in this data.
-
-```{r}
-merged_screening_recoded_na <- merged_screening_recoded_na %>%
-  mutate(person = paste(first_name, last_name, dob, sep = "-"))
-```
-
-```{r}
-person_key <- merged_screening_recoded_na %>% 
-  select(person) %>% 
-  distinct() %>% # 40 rows
-  mutate(person_id = row_number())
-```
-
-```{r}
-merged_screening_recoded_na <- merged_screening_recoded_na %>% 
-  left_join(person_key, by = "person")
-```
-
-```{r}
-merged_screening_recoded_na <- merged_screening_recoded_na %>% select(-person)
-```
-
-```{r}
-rm(person_key)
-```
-
-
-Now, remove person identifiers
-
 ```{r}
 merged_screening_recoded_na_deidentified <- merged_screening_recoded_na %>% 
   select(incident_pcr_number, age:compliance_match, time_diff:person_id)
-```
-
-
-## Data checks
-
-```{r}
-sum(is.na(merged_screening_recoded_na_deidentified$person_id)) # 0
 ```
 
 ```{r}

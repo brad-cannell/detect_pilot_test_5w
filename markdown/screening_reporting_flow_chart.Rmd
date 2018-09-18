@@ -1,0 +1,169 @@
+---
+title: "DETECT Pilot Study Screening and Reporting Flow Chart"
+date: "Created: 2018-09-07 <br> Updated: `r Sys.Date()`"
+output: 
+  html_notebook:
+    css: custom-css.css
+---
+
+Helpful resources:
+
+https://cran.r-project.org/web/packages/Gmisc/vignettes/Grid-based_flowcharts.html
+
+https://www.r-bloggers.com/flow-charts-in-r/
+
+https://www.stat.auckland.ac.nz/~paul/R/Diagram/diagram.pdf
+
+```{r}
+library(grid)
+library(Gmisc)
+```
+
+```{r}
+test <- 220
+```
+
+```{r fig.height=4, fig.width=5}
+# =============================================================================
+# Create Viewport
+# =============================================================================
+grid.newpage()
+chart_width <- grid::unit(7.5, "inch")
+chart_height <- grid::unit(7, "inch")
+pushViewport(viewport(width = chart_width, height = chart_height))
+
+# =============================================================================
+# Calculations for box spacing
+# =============================================================================
+splits <- 4
+n_vert_layers <- 6
+n_horz_layers <- (splits * 2) + 1
+vert_breaks <- 1/n_vert_layers
+horz_breaks <- 1/n_horz_layers
+y_coords <- seq(vert_breaks * n_vert_layers, vert_breaks, -vert_breaks)
+x_coords <- seq(horz_breaks, horz_breaks * n_horz_layers, horz_breaks)
+
+# =============================================================================
+# Create text boxes and print to viewport
+# =============================================================================
+(call911 <- boxGrob(
+  label = "911 Call",
+  x = x_coords[8],
+  y = y_coords[1],
+  box_gp = gpar(fill = "white")
+))
+
+(eligible <- boxGrob(
+  label = paste("Eligibility\n N =", test),
+  x = x_coords[8],
+  y = y_coords[2],
+  box_gp = gpar(fill = "white")
+))
+
+(screened <- boxGrob(
+  label = "Screened\n N = ###",
+  x = x_coords[6],
+  y = y_coords[3],
+  box_gp = gpar(fill = "white")
+))
+
+(not_screened <- boxGrob(
+  label = "Not Screened\n N = ###",
+  x = x_coords[9],
+  y = y_coords[3],
+  box_gp = gpar(fill = "white")
+))
+
+(screen_pos <- boxGrob(
+  label = "Screen Positive\n N = ###",
+  x = x_coords[4],
+  y = y_coords[4],
+  box_gp = gpar(fill = "white")
+))
+
+(screen_neg <- boxGrob(
+  label = "Screen Negative\n N = ###",
+  x = x_coords[7],
+  y = y_coords[4],
+  box_gp = gpar(fill = "white")
+))
+
+(report <- boxGrob(
+  label = "Report to APS\n N = ###",
+  x = x_coords[2],
+  y = y_coords[5],
+  box_gp = gpar(fill = "white")
+))
+
+(no_report <- boxGrob(
+  label = "No Report to APS\n N = ###",
+  x = x_coords[5],
+  y = y_coords[5],
+  box_gp = gpar(fill = "white")
+))
+
+(compliance <- boxGrob(
+  label = "Inform MedStar Compliance\n N = ###",
+  x = x_coords[1] - 0.1,
+  y = y_coords[6],
+  box_gp = gpar(fill = "white")
+))
+
+(no_compliance <- boxGrob(
+  label = "Did Not Inform MedStar Compliance\n N = ###",
+  x = x_coords[3] + 0.1,
+  y = y_coords[6],
+  box_gp = gpar(fill = "white")
+))
+
+
+# Data nodes
+(medstar_screening <- boxGrob(
+  label = "MedStar Screening Data\n N = ###",
+  x = 0.25,
+  y = y_coords[3],
+  box_gp = gpar(fill = "white")
+))
+
+(medstar_report <- boxGrob(
+  label = "MedStar Report Data\n N = ###",
+  x = x_coords[1] - 0.1,
+  y = y_coords[6] - vert_breaks,
+  box_gp = gpar(fill = "white")
+))
+
+# =============================================================================
+# Connect text boxes
+# =============================================================================
+
+# First, create a reusable set of parameters for the arrow
+arrow_parms <- grid::arrow(angle = 30, length = unit(4, "mm"), type = "closed")
+
+# Start building connections
+connectGrob(call911, eligible, type = "vertical", arrow_obj = arrow_parms)
+connectGrob(eligible, screened, type = "N",arrow_obj = arrow_parms)
+connectGrob(eligible, not_screened, type = "N",arrow_obj = arrow_parms)
+connectGrob(screened, screen_pos, type = "N",arrow_obj = arrow_parms)
+connectGrob(screened, screen_neg, type = "N",arrow_obj = arrow_parms)
+connectGrob(screen_pos, report, type = "N",arrow_obj = arrow_parms)
+connectGrob(screen_pos, no_report, type = "N",arrow_obj = arrow_parms)
+connectGrob(report, compliance, type = "N",arrow_obj = arrow_parms)
+connectGrob(report, no_compliance, type = "N",arrow_obj = arrow_parms)
+
+# Connect data nodes
+connectGrob(screened, medstar_screening, type = "horizontal",arrow_obj = arrow_parms)
+connectGrob(compliance, medstar_report, type = "vertical",arrow_obj = arrow_parms)
+
+popViewport()
+```
+
+How do I save?
+Can I change the font?
+
+
+```{r}
+grid.newpage()
+grid.rect(width = 0.25)
+grid.text("ISBN")
+```
+

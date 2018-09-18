@@ -3,52 +3,91 @@ title: "Descriptive Analysis of Matched Screenings"
 date: "Created: 2016-03-05 <br> Updated: `r Sys.Date()`"
 output: 
   html_notebook:
-    css: detect_pilot_css.css
-description: In this analysis, we only used data from DETECT screenings that we were able to match to APS investigations. We calculate some basic descriptive statistics about the older adults who were screened. We also calculate some basic descriptive statistics about the various parameters of the investigations (i.e., allegations, perpetrators, and dispositions).
+    css: custom-css.css
 ---
 
-`r rmarkdown::metadata$description`
+# Overview
 
--------------------------------------------------------------------------------
+In this analysis, we only used data from DETECT screenings that we were able to match to APS investigations. We calculate some basic descriptive statistics about the older adults who were screened. We also calculate some basic descriptive statistics about the various parameters of the investigations (i.e., allegations, perpetrators, and dispositions).
 
-```{r setup, include = FALSE}
+We start with the following data:
+
+* **merged_screening_recoded_na_deidentified.feather** - MedStar DETECT screenings that were matched to APS investigations on name and date of birth. Data cleaned in data_03_merge_medstar_aps.Rmd and deidentified in data_04_preprocess_merged_for_analysis.Rmd.
+
+
+# Table of contents
+
+1. [Calculate descriptive statistics of interes](#descriptives)         
+    
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
 Sys.setenv(TZ = "US/Central")
-knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>"
-)
 ```
 
 ```{r load_packages, message=FALSE}
 library(tidyverse)
-library(readxl)
-library(lubridate)
-library(stringr)
-library(bfuncs) # devtools::install_github("brad-cannell/bfuncs")
+library(bfuncs)
 ```
+
 
 # Load data
 
-merged_screening_recode.RData was created in preprocess_for_analysis.Rmd
-
 ```{r}
-merged <- read_rds("/Users/bradcannell/Desktop/merged.RData")
-about_data(merged) # 67 observations and 57 variables
+# Erase when this file is finalized.
+# merged <- read_rds("/Users/bradcannell/Desktop/merged.RData")
+# about_data(merged) # 67 observations and 57 variables
 ```
 
-How many unique investigations are there?
-
 ```{r}
-unique(merged$group) %>% length() # 46 unique investigations
+merged_screening_recoded_na_deidentified <- feather::read_feather(
+  "../data/merged_screening_recoded_na_deidentified.feather"
+)
 ```
 
-The `r length(unique(merged$group))` above goes in the tier 2 box on the DETECT Pilot Screening-Investigation Merge Flow Chart.
+
+## Shorten the name of the dataset
+
+Shorten the name of the dataset from **merged_screening_recoded_na_deidentified** to **merged_srd** to make it easier to work with.
+
+```{r}
+merged_srd <- merged_screening_recoded_na_deidentified
+rm(merged_screening_recoded_na_deidentified)
+```
+
+```{r}
+about_data(merged_srd) # 67 observations and 37 variables
+```
+
+
+
+
+
+
+
+
+
 
 -------------------------------------------------------------------------------
 
-# Calculate descriptive statistics of interest
+# Calculate descriptive statistics of interest {#descriptives}
 
-Because it is possible for there to be more than one allegation associated with each APS investigation, some people have more than one row in the data. It is also possible to have more than one instance of the DETECT screening tool used (response number) per APS investigation (case number).
+-------------------------------------------------------------------------------
+
+## How many unique screenings matched to investigations are there?
+
+```{r}
+merged_srd %>% 
+  distinct(incident_pcr_number) %>% 
+  summarise(`Unique incident PCR numbers` = n())
+```
+
+
+The above goes in the _DETECT screenings matched to APS investigations_ box on the Flow diagram illustrating which data sources were used for each analysis, and how final sample sizes were derived.
+
+
+
+Because it is possible for there to be more than one allegation associated with each APS investigation, some people have more than one row in the data. It is also possible to have more than one instance of the DETECT screening tool used (incident PCR number) per APS investigation (case number).
 
 We want our statistics calculated at the screening/investigation combination (group) level.
 

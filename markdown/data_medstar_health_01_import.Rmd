@@ -1,0 +1,376 @@
+---
+title: "Import MedStar Demographics and Health Data"
+date: "Created: 2016-09-09 <br> Updated: `r Sys.Date()`"
+output: 
+  html_notebook:
+    css: custom-css.css
+---
+
+# Table of contents
+
+* [Overview](#overview)   
+* [Load packages and data](#load)   
+* [Import MedStar data containing the patient demographic and health information](#import)      
+* [Check for duplicate records](#duplicates)   
+* [Preliminary variable management](#pvm)    
+* [Save current version of the MedStar demographics and health data](#save)   
+
+
+# Overview {#overview}
+
+In this file we import the data sent to us by MedStar that includes demographic and selected health data about every person they treated who was 65 years old or older, treated in their residence, and treated during the 5-week DETECT pilot study (2015-09-17 -- 2015-10-26). Specifically, the input data set is called:
+
+* DETECT-Patient-Data_2017-07-19_144931.xlsx
+
+
+# Load packages and data {#load}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+Sys.setenv(TZ = "US/Central")
+```
+
+```{r load_packages, message=FALSE}
+library(tidyverse)
+library(bfuncs)
+```
+
+
+## Load MedStar compliance data
+
+Imported and cleaned in data_medstar_compliance_01_import.Rmd
+
+```{r}
+response_ids <- feather::read_feather("/Volumes/sph_research/Detect/response_ids.feather")
+```
+
+
+
+
+
+
+
+
+
+
+# Import MedStar data containing the patient demographic and health information {#import}
+
+```{r}
+col_info <- c( 
+  # "col_name",           "col_type"
+  "date_entered",         "date",
+  "incident_call_number", "text",
+  "incident_pcr_number",  "text",
+  "first_name",           "text",
+  "last_name",            "text",
+  "age",                  "numeric",
+  "gender",               "text",
+  "race",                 "text",
+  "chief_complaint",      "text",
+  "primary_impression",   "text",
+  "primary_symptom",      "text",
+  "other_symptom",        "text",
+  "drug_use",             "text",
+  "crew_member_id",       "text",
+  "medical_surgery_hist", "text",
+  "current_meds",         "text")
+
+# Import data
+medstar_health <- readxl::read_excel(
+  path = "/Volumes/sph_research/Detect/DETECT-Patient-Data_2017-07-19_144931.xlsx",
+  col_names = col_info[seq(1, length(col_info), 2)],
+  col_types = col_info[seq(2, length(col_info), 2)],
+  skip = 1)
+rm(col_info)
+```
+
+```{r}
+about_data(medstar_health) # 99,724 observations and 16 variables
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Check for duplicate records {#duplicates}
+
+## Check for entire duplicate rows
+
+```{r}
+medstar_health %>% 
+  arrange(!!! rlang::syms(names(medstar_health))) %>% 
+  group_by_all() %>% 
+  filter(n() > 1) %>% 
+  count() %>% 
+  ungroup() %>% 
+  select(n) # 387 groups of duplicates
+```
+
+
+I manually inspected the duplicate rows. They appear to be genuine duplicates. Below I will drop the duplicate rows.
+
+```{r}
+medstar_health <- medstar_health %>% 
+  group_by_all() %>% 
+  mutate(
+    count = row_number(), # Counts rows by group
+    dup   = count > 1     # TRUE if there is more than one row per group
+  ) %>% 
+  ungroup() %>% 
+  filter(!dup) %>% 
+  select(-count, -dup)
+```
+
+```{r}
+about_data(medstar_health) # 99,311 observations and 16 variables
+```
+
+
+## Check for incident PCR numbers that correspond to more than one person
+
+**NOTE:** No two people should have the same incident PCR number; however, a single person may have multiple incident PCR numbers if they were treated by MedStar on multiple occasions.
+
+**NOTE:** There are multiple rows in this data for each person. Those rows that are complete duplicates were already dropped above. Because our purpose is just to see if there are any instances were a incident PCR number corresponds to more than one name, we are just going to keep one row per combination of incident PCR number and first name.
+
+```{r}
+medstar_health %>% 
+  group_by(incident_pcr_number, first_name) %>% 
+  mutate(count = row_number()) %>% 
+  filter(count == 1) %>% # 2,018 rows
+  ungroup() %>% 
+  summarise(
+    `Rows grouped by PCR and Name` = n(),
+    `Unique PCR numbers` = unique(incident_pcr_number) %>% length()
+  )
+```
+
+The number of rows when grouped by incident PCR number and name (2,018) is the same as the number of unique incident PCR numbers. Therefore, each incident PCR number is associated with a single person. Again, however, any given person my have multiple incident PCR numbers if they were treated by MedStar more than once.
+
+
+## Count rows, unique responses, and unique people
+
+```{r}
+medstar_health %>% 
+  mutate(person = paste(first_name, last_name, age, sep = "_")) %>% 
+  group_by(incident_call_number, first_name) %>% 
+  mutate(incident_names = paste(incident_call_number, first_name, sep = "_")) %>% 
+  ungroup() %>% 
+  summarise(
+    `Total Rows` = n() %>% format(big.mark = ","),
+    `Unique Incidents` = unique(incident_call_number) %>% length() %>% format(big.mark = ","),
+    `Unique PCR` = unique(incident_pcr_number) %>% length() %>% format(big.mark = ","),
+    `Unique Incident And Name` = unique(incident_names) %>% length() %>% format(big.mark = ","),
+    `Unique People` = unique(person) %>% length() %>% format(big.mark = ",")
+  )
+```
+
+So, the MedStar demographics and health data contains 99,311 total rows of data that correspond to 2,011 911 responses, 2,018 incident PCR numbers, 2,014 unique response/name combinations, and 1,776 unique people (assuming first name, last name, and age uniquely identifies people in this data).
+
+**Note:** Creating a unique identifier based on name is complicated by data entry errors (i.e., misspelled names and mistyped dates of birth). We do a better job of identifying unique people later. We leave it here for instructional purposes only.
+
+
+## Why does "Unique PCR" and "Unique Incident And Name" Differ?
+
+Theoretically, these should be the same. Below, we inspect the data to understand the discrepancy (results hidden to protect participant privacy).
+
+```{r eval=FALSE}
+medstar_health %>% 
+  
+  # Count total rows for each PCR number
+  group_by(incident_pcr_number) %>% 
+  mutate(count_pcr = n()) %>% 
+  
+  # Count total rows for each combo of incident and name
+  group_by(incident_call_number, first_name) %>% 
+  mutate(incident_name_count = n()) %>% 
+  
+  # Where do they differ?
+  ungroup() %>% 
+  filter(count_pcr != incident_name_count) %>% 
+  
+  # PCR number changes more frequently (2,108) than incident/name combos (2,104)
+  # Keep one row per PCR number
+  group_by(incident_pcr_number) %>% 
+  filter(row_number() == 1)
+```
+
+
+There are 4 groups of incident call numbers that have multiple incident PCR numbers for the same person. For example:
+
+incident_call_number | incident_pcr_number | first_name | last_name
+-------------------- | ------------------- | ---------- | ---------
+150917001            | 15000001            | John       | Smith
+150917001            | 15000002            | John       | Smith
+
+We spoke with MedStar on 2017-07-27. There are two reasons for multiple PCR numbers for a given incident number:
+
+1. If there is more than one person treated at a given incident, they each get a unique PCR number, which does not apply to the cases above.
+
+2. It could be an error caused by the chart being reopened to add more data. That appears to have happened some in our data. The dates, times, etc. are all identical. 
+
+Therefore, for each group, we are going to keep only one incident PCR number. We will arbitrarily retain the lowest incident PCR number.
+
+
+## Condense incident PCR numbers within combinations of incident call number and name
+
+```{r}
+medstar_health <- medstar_health %>% 
+  group_by(incident_call_number, first_name) %>% 
+  mutate(incident_pcr_number = min(incident_pcr_number)) %>% 
+  ungroup()
+```
+
+
+## Count rows, unique responses, and unique people
+
+```{r}
+medstar_health %>% 
+  mutate(person = paste(first_name, last_name, age, sep = "_")) %>% 
+  group_by(incident_call_number, first_name) %>% 
+  mutate(incident_names = paste(incident_call_number, first_name, sep = "_")) %>% 
+  ungroup() %>% 
+  summarise(
+    `Total Rows` = n() %>% format(big.mark = ","),
+    `Unique Incidents` = unique(incident_call_number) %>% length() %>% format(big.mark = ","),
+    `Unique PCR` = unique(incident_pcr_number) %>% length() %>% format(big.mark = ","),
+    `Unique Incident And Name` = unique(incident_names) %>% length() %>% format(big.mark = ","),
+    `Unique People` = unique(person) %>% length() %>% format(big.mark = ",")
+  )
+```
+
+And now the number of unique PCR numbers and unique combinations of incident call number and name are identical.
+
+**Note:** Creating a unique identifier based on name is complicated by data entry errors (i.e., misspelled names and mistyped dates of birth). We do a better job of identifying unique people later. We leave it here for instructional purposes only.
+
+
+
+
+
+
+
+
+
+
+# Preliminary variable management {#pvm}
+
+## Standardize character strings
+
+Because we will merge this data with other data sets in the future based on character strings (e.g., name, address), we need to go ahead and standardize their formats here. This will prevent mismatches during the merges. Specifically, we:
+
+1. Transform all characters to lower case   
+2. Remove any special characters (e.g., hyphens, periods)   
+3. Remove trailing spaces (e.g., "John Smith ")   
+4. Remove double spaces (e.g., "John  Smith")  
+
+```{r eval=FALSE}
+# Examples for data checking
+# medstar_health %>%
+#   select(incident_call_number, first_name, last_name) %>%
+#   filter(
+#     # Special characters other than spaces
+#     stringr::str_detect(first_name, "[^a-zA-Z\\d\\s]") |
+#     stringr::str_detect(last_name, "[^a-zA-Z\\d\\s]") |
+# 
+#     # Trailing space
+#     stringr::str_detect(first_name, "[[:blank:]]$") |
+#     stringr::str_detect(last_name, "[[:blank:]]$") |
+# 
+#     # Double (or more) space
+#     stringr::str_detect(first_name, "[[:blank:]]{2,}") |
+#     stringr::str_detect(last_name, "[[:blank:]]{2,}")
+#   ) %>% 
+#   distinct()
+```
+
+```{r}
+vars <- quos(first_name, last_name)
+
+medstar_health <- medstar_health %>% 
+  mutate_at(vars(!!! vars), tolower) %>% 
+  mutate_at(vars(!!! vars), stringr::str_replace_all, "[^a-zA-Z\\d\\s]", " ") %>%
+  mutate_at(vars(!!! vars), stringr::str_replace, "[[:blank:]]$", "") %>% 
+  mutate_at(vars(!!! vars), stringr::str_replace_all, "[[:blank:]]{2,}", " ")
+```
+
+
+## Split up two-part first names
+
+Some first names actually have two parts (e.g., Mary Jo). Later, when we merge the DETECT screening data with the demographics and health data, we do so by incident call number and first name. Failing to split up two parts of the first name here prevents the merge from completing as desired.
+
+```{r eval=FALSE}
+# Examples for data checking
+# medstar_health %>%
+#   filter(stringr::str_detect(medstar_health$first_name, "\\w+\\s\\w+")) %>%
+#   pull(first_name) %>%
+#   unique()
+```
+
+```{r}
+medstar_health <- medstar_health %>%
+  mutate(
+    first_name_02 = stringr::str_extract(first_name, "(?<=[[:blank:]])\\w+"),
+    first_name_01 = stringr::str_extract(first_name, "\\w+(?=[[:blank:]])"),
+    first_name_01 = if_else(is.na(first_name_01), first_name, first_name_01)
+  ) %>% 
+  select(-first_name) %>% 
+  rename(first_name = first_name_01)
+```
+
+
+## Reorder variables
+
+```{r}
+medstar_health <- medstar_health %>% 
+  select(date_entered:incident_pcr_number, first_name, first_name_02, everything())
+```
+
+
+## Coerce selected character vectors to factors
+
+```{r}
+medstar_health <- medstar_health %>% 
+  mutate_at(
+    vars(gender, race, chief_complaint, primary_impression, primary_symptom, 
+         other_symptom, drug_use, crew_member_id, medical_surgery_hist, 
+         current_meds),
+    factor
+  )
+```
+
+```{r}
+about_data(medstar_health) # 99,311 observations and 17 variables
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Save current version of the MedStar demographics and health data {#save}
+
+```{r}
+feather::write_feather(medstar_health, "/Volumes/sph_research/Detect/medstar_health.feather")
+```
+
+[top](#top)
+
+&nbsp;
+
+-------------------------------------------------------------------------------
+
+```{r echo=FALSE}
+sessionInfo()
+```
