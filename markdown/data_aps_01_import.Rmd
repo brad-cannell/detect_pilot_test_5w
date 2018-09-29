@@ -137,8 +137,47 @@ min(client_data$intake_start)
 max(client_data$intake_start) # 2015-09-17 to 2015-11-05
 ```
 
+
+## Standardize character strings
+
+Because we will merge this data with other data sets in the future based on character strings (e.g., name), we need to go ahead and standardize their formats here. This will prevent mismatches during the merges. Specifically, we:
+
+1. Transform all characters to lower case   
+2. Remove any special characters (e.g., hyphens, periods)   
+3. Remove trailing spaces (e.g., "John Smith ")   
+4. Remove double spaces (e.g., "John  Smith")  
+
+```{r eval=FALSE}
+# Examples for data checking
+# client_data %>%
+#   select(case_num, full_name, first_name, middle_name, last_name, address, city) %>%
+#   filter(
+#     # Special characters other than spaces
+#     stringr::str_detect(full_name, "[^a-zA-Z\\d\\s]") |
+#     stringr::str_detect(address, "[^a-zA-Z\\d\\s]") |
+# 
+#     # Trailing space
+#     stringr::str_detect(full_name, "[[:blank:]]$") |
+#     stringr::str_detect(address, "[[:blank:]]$") |
+# 
+#     # Double (or more) space
+#     stringr::str_detect(full_name, "[[:blank:]]{2,}") |
+#     stringr::str_detect(address, "[[:blank:]]{2,}")
+#   )
+```
+
 ```{r}
-about_data(client_data)
+vars <- quos(full_name, first_name, middle_name, last_name, address, city)
+
+client_data <- client_data %>% 
+  mutate_at(vars(!!! vars), tolower) %>% 
+  mutate_at(vars(!!! vars), stringr::str_replace_all, "[^a-zA-Z\\d\\s]", " ") %>%
+  mutate_at(vars(!!! vars), stringr::str_replace, "[[:blank:]]$", "") %>% 
+  mutate_at(vars(!!! vars), stringr::str_replace_all, "[[:blank:]]{2,}", " ")
+```
+
+```{r}
+about_data(client_data) # 747 observations and 13 variables
 ```
 
 There are **747 observations and 13 variables** in the APS client info data.

@@ -58,7 +58,7 @@ library(bfuncs)
 Created in data_medstar_detect_screenings_01_import.Rmd
 
 ```{r}
-medstar_detect <- feather::read_feather("/Volumes/sph_research/Detect/medstar_detect.feather")
+medstar_detect <- feather::read_feather("/Volumes/Detect/medstar_detect.feather")
 ```
 
 ```{r}
@@ -71,11 +71,11 @@ about_data(medstar_detect) # 1,247 observations and 45 variable
 Created in data_medstar_health_01_import.Rmd
 
 ```{r}
-medstar_health <- feather::read_feather("/Volumes/sph_research/Detect/medstar_health.feather")
+medstar_health <- feather::read_feather("/Volumes/Detect/medstar_health.feather")
 ```
 
 ```{r}
-about_data(medstar_health) # 99,311 observations and 17 variables
+about_data(medstar_health) # 99,309 observations and 17 variables
 ```
 
 
@@ -126,7 +126,7 @@ medstar_complete <- medstar_health %>%
 ```
 
 ```{r}
-about_data(medstar_complete) # 99,311 observations and 60 variables
+about_data(medstar_complete) # 99,309 observations and 60 variables
 ```
 
 [top](#top)
@@ -239,7 +239,7 @@ medstar_complete <- medstar_complete %>%
 ```
 
 ```{r}
-about_data(medstar_complete) # 99,311 observations and 59 variables
+about_data(medstar_complete) # 99,309 observations and 59 variables
 ```
 
 
@@ -302,7 +302,7 @@ medstar_complete <- medstar_complete %>%
 ```
 
 ```{r}
-about_data(medstar_complete) # 99,311 observations and 58 variables
+about_data(medstar_complete) # 99,309 observations and 58 variables
 ```
 
 
@@ -363,7 +363,7 @@ medstar_complete <- medstar_complete %>%
 ```
 
 ```{r}
-about_data(medstar_complete) # 99,311 observations and 57 variables
+about_data(medstar_complete) # 99,309 observations and 57 variables
 ```
 
 The MedStar demographics and health data is now linked to the DETECT screening data. There are some instances when more than one person was screened at a given incident. However, each incident PCR number is linked to a unique screening - if one exists.
@@ -382,7 +382,7 @@ The MedStar demographics and health data is now linked to the DETECT screening d
 # Save the merged MedStar datasets {#save}
 
 ```{r}
-feather::write_feather(medstar_complete, "/Volumes/sph_research/Detect/medstar_complete.feather")
+feather::write_feather(medstar_complete, "/Volumes/Detect/medstar_complete.feather")
 ```
 
 [top](#top)
