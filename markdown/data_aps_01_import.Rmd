@@ -73,7 +73,7 @@ library(bfuncs)
 # Import APS client info data {#client-info}   
 
 ```{r}
-path <- "/Volumes/sph_research/Detect/APS In-Home Intakes of Clients Age 65 or Over in Denton Johnson or Tarrant Counties.xlsx"
+path <- "/Volumes/Detect/APS In-Home Intakes of Clients Age 65 or Over in Denton Johnson or Tarrant Counties.xlsx"
 ```
 
 The client info data contains patient identifiers.
@@ -113,10 +113,14 @@ about_data(client_data) # 747 observations and 13 variables
 ```{r}
 client_data %>% 
   group_by(case_num) %>% 
-  filter(n() > 1) %>% 
+  filter(row_number() > 1) %>% 
   count() %>% 
   ungroup() %>% 
-  select(n) # 58
+  select(n) %>% 
+  summarise(
+    `Number of Cases with > 1 Rows` = nrow(.),         # 58
+    `Number of Duplicate Rows by Case Number` = sum(n) # 68
+  )
 ```
 
 ## Check for duplicate rows by case number and intake_stage
@@ -133,8 +137,11 @@ client_data %>%
 ## Check dates
 
 ```{r}
-min(client_data$intake_start)
-max(client_data$intake_start) # 2015-09-17 to 2015-11-05
+client_data %>% 
+  summarise(
+    `Earliest Date` = min(intake_start), # 2015-09-17
+    `Latest Date` = max(intake_start)    # 2015-11-05
+  )
 ```
 
 
@@ -179,8 +186,6 @@ client_data <- client_data %>%
 ```{r}
 about_data(client_data) # 747 observations and 13 variables
 ```
-
-There are **747 observations and 13 variables** in the APS client info data.
 
 [top](#top)
 
@@ -234,10 +239,14 @@ allegations <- allegations %>%
 ```{r}
 allegations %>% 
   group_by(case_num) %>% 
-  filter(n() > 1) %>% 
+  filter(row_number() > 1) %>% 
   count() %>% 
   ungroup() %>% 
-  select(n)
+  select(n) %>% 
+  summarise(
+    `Number of Cases with > 1 Rows` = nrow(.),         # 245
+    `Number of Duplicate Rows by Case Number` = sum(n) # 408
+  )
 ```
 
 There are 245 case numbers that appear in the data 2 or more times.
@@ -248,10 +257,14 @@ There are 245 case numbers that appear in the data 2 or more times.
 ```{r}
 allegations %>% 
   group_by(case_num, intake_stage) %>% 
-  filter(n() > 1) %>% 
+  filter(row_number() > 1) %>% 
   count() %>% 
   ungroup() %>% 
-  select(n)
+  select(n) %>% 
+  summarise(
+    `Number of Cases/Intake Stages with > 1 Rows` = nrow(.), # 237
+    `Number of Duplicate Rows` = sum(n)                      # 340
+  )
 ```
 
 There are 237 combinations of case number and intake stage that appear in the data 2 or more times. This happens when multiple allegations are mode at a single report (intake stage) for a case. Some cases have more than one reporter.
@@ -262,10 +275,14 @@ There are 237 combinations of case number and intake stage that appear in the da
 ```{r}
 allegations %>% 
   group_by(case_num, intake_stage, allegation) %>% 
-  filter(n() > 1) %>% 
+  filter(row_number() > 1) %>% 
   count() %>% 
   ungroup() %>% 
-  select(n)
+  select(n) %>% 
+  summarise(
+    `Number of Cases/Intake Stages/Allegations with > 1 Rows` = nrow(.), # 80
+    `Number of Duplicate Rows` = sum(n)                                  # 90
+  )
 ```
 
 There are 80 combinations of case number, intake stage, and allegation that appear in the data 2 or more times. This happens when there is more than one type of perpetrator for a single allegation, within a single report (intake stage) for a case.
@@ -276,10 +293,14 @@ There are 80 combinations of case number, intake stage, and allegation that appe
 ```{r}
 allegations %>% 
   group_by(case_num, intake_stage, allegation, perp) %>% 
-  filter(n() > 1) %>% 
+  filter(row_number() > 1) %>% 
   count() %>% 
   ungroup() %>% 
-  select(n)
+  select(n) %>% 
+  summarise(
+    `Number of Cases/Intake Stages/Allegations/Perp with > 1 Rows` = nrow(.), # 32
+    `Number of Duplicate Rows` = sum(n)                                       # 36
+  )
 ```
 
 There are 32 combinations of case number, intake stage, allegation, and perpetrator that appear in the data 2 or more times. This happens when there is more than one perpetrator of the same type (But different perpetrator ID's) for a single allegation, within a single report (intake stage) for a case.
@@ -290,10 +311,14 @@ There are 32 combinations of case number, intake stage, allegation, and perpetra
 ```{r}
 allegations %>% 
   group_by_all() %>% 
-  filter(n() > 1) %>% 
+  filter(row_number() > 1) %>% 
   count() %>% 
   ungroup() %>% 
-  select(n)
+  select(n) %>% 
+  summarise(
+    `Number of all vars with > 1 Rows` = nrow(.),   # 0
+    `Number of Duplicate Rows by All Vars` = sum(n) # 0
+  )
 ```
 
 There are no complete duplicate rows.  
@@ -312,8 +337,6 @@ allegations <- allegations %>%
 
 about_data(allegations) # 1,051 observations and 4 variables
 ```
-
-There are **1,051 observations and 4 variables** in the APS allegations data.
 
 [top](#top)
 
@@ -350,13 +373,18 @@ about_data(closure) # 747 observations and 3 variables
 
 
 ## Check for duplicate rows by case number
+
 ```{r}
 closure %>% 
   group_by(case_num) %>% 
-  filter(n() > 1) %>% 
+  filter(row_number() > 1) %>% 
   count() %>% 
   ungroup() %>% 
-  select(n) # 58
+  select(n) %>% 
+  summarise(
+    `Number of Cases with > 1 Rows` = nrow(.),         # 58
+    `Number of Duplicate Rows by Case Number` = sum(n) # 68
+  )
 ```
 
 
@@ -368,14 +396,16 @@ closure %>%
   filter(n() > 1) %>% 
   count() %>% 
   ungroup() %>% 
-  select(n) # 0
+  select(n) %>% 
+  summarise(
+    `Number of Cases/Intake Stages with > 1 Rows` = nrow(.), # 0
+    `Number of Duplicate Rows` = sum(n)                      # 0
+  )
 ```
 
 ```{r}
 about_data(closure) # 747 observations and 3 variables
 ```
-
-There are **747 observations and 3 variables** in the APS closure reason data
 
 [top](#top)
 
@@ -420,66 +450,22 @@ disposition <- disposition %>% slice(-n())
 ```
 
 
-## Check for duplicate rows by case number
-
-```{r}
-disposition %>% 
-  group_by(case_num) %>% 
-  filter(n() > 1) %>% 
-  count() %>% 
-  ungroup() %>% 
-  select(n) # 276
-```
-
-
-## Check for duplicate rows by case number and allegation
-
-```{r}
-disposition %>% 
-  group_by(case_num, allegation) %>% 
-  filter(n() > 1) %>% 
-  count() %>% 
-  ungroup() %>% 
-  select(n) # 118
-```
-
-
-## Check for duplicate rows by case number, allegation, and perp
-
-```{r}
-disposition %>% 
-  group_by(case_num, allegation, perp) %>% 
-  filter(n() > 1) %>% 
-  count() %>% 
-  ungroup() %>% 
-  select(n) # 53
-```
-
-
-## Check for duplicate rows by case number, allegation, perp, and perp id
-
-```{r}
-disposition %>% 
-  group_by(case_num, allegation, perp, perp_id) %>% 
-  filter(n() > 1) %>% 
-  count() %>% 
-  ungroup() %>% 
-  select(n) # 6
-```
-
-
 ## Check for duplicate rows by all variables
 
 ```{r}
 disposition %>% 
   group_by_all() %>% 
-  filter(n() > 1) %>% 
+  filter(row_number() > 1) %>% 
   count() %>% 
   ungroup() %>% 
-  select(n) # 6 (12 rows)
+  select(n) %>% 
+  summarise(
+    `Number of all vars with > 1 Rows` = nrow(.),   # 6
+    `Number of Duplicate Rows by All Vars` = sum(n) # 6
+  )
 ```
 
-After manually checking the 12 duplicate rows, they appear to truly be complete duplicates. I will keep one row from each set of duplicates.
+After manually checking the 6 duplicate rows, they appear to truly be complete duplicates. I will keep one row from each set of duplicates.
 
 ```{r}
 disposition <- disposition %>% 
@@ -493,8 +479,6 @@ disposition <- disposition %>%
 
 about_data(disposition) # 1,128 observations and 5 variables
 ```
-
-There are **1,128 observations and 5 variables** in the APS disposition data.
 
 
 ## Is perp id unique to the person, or unique to the person/investigation?
