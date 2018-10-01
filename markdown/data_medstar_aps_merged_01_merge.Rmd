@@ -147,21 +147,57 @@ In this first section, we will subset our datasets of interest (client data and 
 Below, we will use various functions from the [RecordLinkage package](https://cran.r-project.org/web/packages/RecordLinkage/index.html) to find rows in the client data that match rows in the medstar detect data on name and date of birth -- including non-exact matches (e.g. mispelled names, mistyped dates of birth).
 
 
-## Remove redundant rows from MedStar data
+## Nest columns
 
-The MedStar data currently has multiple rows for each screening (incident pcr number). This is redundant for the purpose of merging records and slows down RecordLinkage considerably. So, here we are going to reduce the MedStar data to one row for each incident pcr number.
+The MedStar data currently has multiple rows for each screening (incident pcr number). This is redundant for the purpose of merging records and slows down RecordLinkage considerably. So, here we are going to reduce the MedStar data to one row for each incident pcr number by nesting all other variables.
 
-We are also only going to attempt to pair rows where there is a completed DETECT screening. This this link for an explanation: https://github.com/brad-cannell/detect_pilot_test/issues/17
+We are also only going to attempt to pair rows where there is a completed DETECT screening. This this link for an explanation: https://github.com/brad-cannell/detect_pilot_test/issues/17.
 
 ```{r}
-medstar_one_row_per_incident_pcr <- medstar_complete %>% 
-  group_by(incident_pcr_number) %>% 
-  filter(row_number() == 1) %>% 
-  ungroup() %>% 
-  filter(detect_data == 1)
-
-about_data(medstar_one_row_per_incident_pcr) # 1,247 observations and 57 variables
+medstar_nested <- medstar_complete %>% 
+  
+  # Only keep rows that correspond to a DETECT screening
+  filter(detect_data == 1) %>% 
+  
+  # Nest columns that aren't needed for the RecordLinkage process
+  nest(-incident_pcr_number, -date_entered, -first_name, -last_name, -starts_with("birth"), 
+       .key = "medstar_nested")
 ```
+
+Data check: How many rows are there and how many unique incident PCR numbers are there?
+
+```{r}
+medstar_nested %>% 
+  summarise(
+    Rows = n(),
+    `Unique PCR` = length(unique(incident_pcr_number))
+  )
+```
+
+That means that one PCR is duplicated. Why?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+medstar_nested %>% 
+  group_by(incident_pcr_number) %>% 
+  filter(max(row_number()) == 2) %>% 
+  unnest()
+```
+
+Can we widen these out to tow rows to make it easier to compare differences?
+
 
 
 ## Remove redundant rows from APS client data
@@ -170,7 +206,7 @@ Each time a report is made to APS about a person by phone or email a unique inta
 
 Therefore, some case numbers in the client data will have multiple rows that are redundant aside from the intake stage (person who reported). When we match the APS data to the MedStar data below by name, individual people may get matched more than once (i.e., if they were treated by MedStar more than once, investigated by APS more than once, or both). We are fine with that. However, we don’t want people to by matched once per person who made a report.  
 
-Therefore, we are going to reduce the client data to one row for each case number. However, we add those rows back into the data later.
+Again, we will get around this by nesting all columns that may result in multiple rows per case number.
 
 ```{r}
 client_data_one_row_per_case_num <- client_data %>% 
