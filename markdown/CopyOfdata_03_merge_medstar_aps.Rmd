@@ -1,0 +1,1257 @@
+---
+title: "Merge MedStar Data With APS Data"
+date: "Created: 2016-09-23 <br> Updated: `r Sys.Date()`"
+output: 
+  html_notebook:
+    css: custom-css.css
+---
+
+# Overview
+
+In this file, we will merge the MedStar data and the APS data that we previously cleaned.
+
+We also check the datasets below for response numbers that were submitted to MedStar's legal compliance department by medics as being associated with a patient they reported to APS for investigation.
+
+Specifically:
+
+1. **client_data.feather** - Demographic information from records of all elder abuse and neglect investigations conducted in MedStar's service area between 2015-09-17 and 2015-11-05. Data cleaned in data_clean_aps.Rmd
+
+2. **medstar_detect.feather** - Data from MedStar that contains all uses of the DETECT screening tool. Cleaned in data_clean_medstar.Rmd. Data cleaned in data_clean_medstar.Rmd
+
+3. **response_ids.feather** - These are the response id numbers that correspond to 911 responses where a report was made to APS during the DETECT pilot phase, and MedStar compliance was made aware of the report. Data cleaned in data_and_analysis_medstar_reports_to_aps_2015.Rmd.
+
+4. **allegations.feather** - The allegations data contains information about the allegation type(s) for each case and the perpetrator (self/other) for each allegation. Data cleaned in data_clean_aps.Rmd
+
+5. **closure.feather** - The closure data contains information about the closure reason for each case. Data cleaned in data_clean_aps.Rmd
+
+6. **disposition.feather** - The disposition data contains information about the disposition for each allegation. Data cleaned in data_clean_aps.Rmd
+
+# Table of contents
+
+1. [Determine which rows are likely to be matches](#find-matches)     
+2. [Merge matched APS rows back with client data](#merge-client-data)         
+3. [Merge matched DETECT rows back with MedStar data](#merge-detect-data)    
+4. [Check incident call numbers reported to MedStar compliance](#check-response)     
+5. [Appending the MedStar and APS data back together](#append)     
+6. [Clean appended data - possible matched pairs](#clean-pairs)    
+7. [Merge with other APS data](#merge-aps)      
+8. [Save merged data](#save)     
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+Sys.setenv(TZ = "US/Central")
+```
+
+```{r load_packages, message=FALSE}
+library(tidyverse)
+library(RecordLinkage)
+library(bfuncs)
+```
+
+# Load data
+
+## Response ID's from MedStar compliance data
+
+These are the response id numbers that correspond to 911 responses where a report was made to APS during the DETECT pilot phase and MedStar compliance was made aware of the report. 
+
+Data from data_medstar_compliance_01_import.Rmd
+
+```{r}
+response_ids <- feather::read_feather("/Volumes/Detect/response_ids.feather")
+```
+
+```{r}
+about_data(response_ids) # 14 observations and 1 variable
+```
+
+
+## MedStar DETECT data
+
+This is the data that contains MedStar DETECT responses and demographics and health data.
+
+Data from data_medstar_complete_01_merge.Rmd
+
+```{r}
+medstar_complete <- feather::read_feather("/Volumes/Detect/medstar_complete.feather")
+```
+
+```{r}
+about_data(medstar_complete) # 99,309 observations and 57 variables
+```
+
+
+## APS Client data
+
+Demographic information from records of all elder abuse and neglect investigations conducted in MedStar's service area between 2015-09-17 and 2015-11-05. 
+
+Data from data_aps_01_import.Rmd
+
+```{r}
+client_data <- feather::read_feather("/Volumes/Detect/client_data.feather")
+```
+
+```{r}
+about_data(client_data) # 747 observations and 13 variables
+```
+
+
+## APS Allegations data
+
+The [allegations](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_1340.asp#APS_1340) data contains information about the allegation type(s) for each case and the perpetrator (self/other) for each allegation.
+
+Data from data_aps_01_import.Rmd
+
+```{r}
+allegations <- feather::read_feather("/Volumes/Detect/allegations.feather")
+```
+
+```{r}
+about_data(allegations) # 1,051 observations and 4 variables
+```
+
+
+## APS [closure reason](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2800.asp#APS_2900) data
+
+The closure data contains information about the closure reason for each case.
+
+Data from data_aps_01_import.Rmd
+
+```{r}
+closure <- feather::read_feather("/Volumes/Detect/closure.feather")
+```
+
+```{r}
+about_data(closure) # 747 observations and 3 variables
+```
+
+
+## APS [disposition](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2700.asp#APS_2700) data
+
+The disposition data contains information about the disposition for each allegation.
+
+Data from data_aps_01_import.Rmd
+
+```{r}
+disposition <- feather::read_feather("/Volumes/Detect/disposition.feather")
+```
+
+```{r}
+about_data(disposition) # 1,128 observations and 5 variables
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Prepare MedStar data for record matching {#prep-medstar}
+
+The MedStar data currently has multiple rows for each screening (incident pcr number). This is redundant for the purpose of merging records and slows down RecordLinkage considerably. So, here we are going to reduce the MedStar data to one row for each incident pcr number by nesting all other variables.
+
+We are also only going to attempt to pair rows where there is a completed DETECT screening. This this link for an explanation: https://github.com/brad-cannell/detect_pilot_test/issues/17.
+
+```{r}
+medstar_nested <- medstar_complete %>% 
+  
+  # Only keep rows that correspond to a DETECT screening
+  filter(detect_data == 1) %>% 
+  
+  # Separate DOB into its component parts
+  mutate(
+    birth_mnth = lubridate::month(dob),
+    birth_day  = lubridate::day(dob),
+    birth_year = lubridate::year(dob)
+  ) %>% 
+  
+  # Nest columns that aren't needed for the RecordLinkage process
+  nest(-date_entered, -incident_pcr_number, -first_name, -last_name, -starts_with("birth"), 
+       .key = "medstar_nested")
+```
+
+## Data check: How many rows are there and how many unique incident PCR numbers are there?
+
+```{r}
+medstar_nested %>% 
+  summarise(
+    Rows = n(),
+    `Unique PCR` = length(unique(incident_pcr_number))
+  )
+```
+
+That means that one PCR is duplicated. Below we manually check for differences (results hidden to protect patient privacy).
+
+```{r eval=FALSE}
+medstar_nested %>%
+  group_by(incident_pcr_number) %>%
+  filter(max(row_number()) == 2) %>%
+  unnest() %>%
+  bfuncs::widen_columns(crew_member_id, medical_surgery_hist, current_meds) %>%
+  summarise_all(.funs = funs(unique(.) %>% length())) %>%
+  select_if(.predicate = function(x) x > 1)
+```
+
+The only difference is the data entered. We have confirmation from MedStar that this can sometimes happen when someone updates the record in the ePCR. We will keep the earliest record only. Keep in mind that nothing else about the two records differs.
+
+```{r}
+medstar_nested <- medstar_nested %>% 
+  group_by(incident_pcr_number) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup()
+```
+
+```{r}
+about_data(medstar_nested) # 1,247 observations and 7 variables
+```
+
+At this point each screening (incident_pcr_number) is a single row that can be matched to rows in the APS data.
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Determine which rows are likely to be matches {#find-matches}
+
+-------------------------------------------------------------------------------
+
+In this first section, we will subset our datasets of interest (client data and medstar detect data) to just the variables we want to match on (name, date of birth). We do this because the [RecordLinkage package](https://cran.r-project.org/web/packages/RecordLinkage/index.html) can't make use of, or "pass through" other variables.
+
+Below, we will use various functions from the [RecordLinkage package](https://cran.r-project.org/web/packages/RecordLinkage/index.html) to find rows in the client data that match rows in the medstar detect data on name and date of birth -- including non-exact matches (e.g. mispelled names, mistyped dates of birth).
+
+
+## Subset the variables used for record matching
+
+Create two new data sets (client data compare and medstar compare) that contain only the subset of variables we want to use for linking records between MedStar and APS (i.e., first name, last name, birthdate)
+
+```{r}
+client_data_compare <- client_data %>%
+  mutate(
+    birth_mnth = lubridate::month(dob),
+    birth_day  = lubridate::day(dob),
+    birth_year = lubridate::year(dob)) %>%
+  select(case_num, first_name, last_name, birth_mnth:birth_year)
+
+about_data(client_data_compare) # 747 observations and 6 variables
+```
+
+```{r}
+medstar_compare <- medstar_nested %>%
+  select(incident_pcr_number, first_name, last_name, birth_mnth:birth_year)
+
+about_data(medstar_compare) # 1,247 observations and 6 variables
+```
+
+
+## Add string comparitors
+
+> String comparators measure the similarity between strings, usually with a similarity measure in
+the range [0, 1], where 0 denotes maximal dissimilarity and 1 equality. This allows ‘fuzzy’ comparison patterns as displayed in the following example.
+[Sariyar & Borg, 2010](https://journal.r-project.org/archive/2010/RJ-2010-017/RJ-2010-017.pdf)
+
+Below we Compares each record in data set 1 to each record in data set 2 until all records are compared. For example, id1 - id1, id1-id2, idn-idm. For each pair, a probability match is given for each variable (i.e., first name, last name, etc.). In this case, we are using the Jaro-Winkler distance as our comparison measure ( [Winkler, 1990](http://eric.ed.gov/?id=ED325505), [Wikipedia, 2018](https://en.wikipedia.org/wiki/Jaro%E2%80%93Winkler_distance)).
+
+```{r}
+rpairs_jar <- compare.linkage(
+  dataset1  = client_data_compare, 
+  dataset2  = medstar_compare,
+  strcmp    = c("first_name", "last_name"),
+  exclude   = c("case_num"), # Only uses var name from dataset 1
+  strcmpfun = jarowinkler
+)
+```
+
+
+## Stochastic record linkage
+
+> Stochastic record linkage relies on the assumption of conditional probabilities concerning comparison patterns... In RecordLinkage an EM algorithm is used as a promising method for reliable estimations. The backbone of this algorithm is described by Haber (1984). Weight calculation based on the EM algorithm
+and the method by Contiero et al. (2005) are implemented by functions emWeights and epiWeights. Both take a data set object as argument and return copy with the calculated weights stored in additional components. Calling summary on the result shows the distribution of weights in histogram style. This information can be helpful for determining classification thresholds, e.g. by identifying clusters of record pairs with high or low weights as non-matches or matches respectively.
+[Sariyar & Borg, 2010](https://journal.r-project.org/archive/2010/RJ-2010-017/RJ-2010-017.pdf)
+
+This function calculates weights for record pairs based on the approach used by Contiero et al. in the EpiLink record linkage software. [Contiero et al. (2005)](http://methods.schattauer.de/en/contents/archivepremium/manuscript/431.html)
+
+```{r}
+rpairs_epiwt <- epiWeights(rpairs_jar)
+```
+
+
+## Manually inspect all pairs and their weights
+
+> Discernment between matches and non-matches is achieved by means of computing weight thresholds... The most common practice is to determine thresholds by clerical review, either a single threshold which separates links and non-links or separate thresholds for links and non-links which define a range of doubtable cases between them. RecordLinkage supports this by the function getPairs, which shows record pairs aligned in two consecutive lines along with their weight.
+[Sariyar & Borg, 2010](https://journal.r-project.org/archive/2010/RJ-2010-017/RJ-2010-017.pdf)
+
+Review record pairs aligned in two consecutive rows along with their weight (results hidden to protect participant privacy):
+
+```{r eval=FALSE}
+weighted_pairs <- getPairs(rpairs_epiwt, max.weight = Inf, min.weight = 0.5)
+weighted_pairs
+```
+
+When the weight dips below 0.7449810, the matches begin to break down.
+
+
+## Classification
+
+> When appropriate thresholds are found, classification is performed with emClassify or epiClassify, which take as arguments the data set object and one or two classification thresholds.
+[Sariyar & Borg, 2010](https://journal.r-project.org/archive/2010/RJ-2010-017/RJ-2010-017.pdf)
+
+```{r classification}
+result <- epiClassify(rpairs_epiwt, 0.7449810 - .00001)
+```
+
+> The result is an object of class "RecLinkResult", which differs from the data object in having a component prediction that represents the classification result. Calling summary on such an object shows error measures and a table comparing true and predicted matching status [(Sariyar & Borg, 2010)](https://journal.r-project.org/archive/2010-2/RJournal_2010-2_Sariyar+Borg.pdf).
+
+```{r}
+summary(result)
+```
+
+
+## Filter for the pairs that were classified as [possible] links, "L"
+
+```{r}
+results_links          <- result[result$prediction == "L"]
+pairs_possible_matches <- getPairs(results_links)
+```
+
+
+## Process pairs data for merging back to original data frames
+
+```{r}
+pairs_possible_matches <- pairs_possible_matches %>% 
+  filter(id != "") %>% # Drop blank rows that are used as separators between pairs
+  mutate(
+    row  = row_number(), # Create a row number variable
+    pair = rep(seq(nrow(.) / 2), each = 2) # Create pair number
+  )
+
+about_data(pairs_possible_matches) # 264 observations and 9 variables
+```
+
+
+## Coerce variables from factor to numeric/character as appropriate  
+
+```{r}
+pairs_possible_matches <- pairs_possible_matches %>%
+  map_at(
+    .at = c("id", "birth_mnth", "birth_day", "birth_year", "Weight"),
+    .f  = ~ as.numeric(as.character(.))
+  ) %>%
+  map_at(
+    .at = c("first_name", "last_name"),
+    .f  = as.character
+  )%>% 
+  as_tibble()
+```
+
+
+```{r}
+rm(client_data_compare, medstar_compare, result, results_links, rpairs_epiwt, rpairs_jar)
+```
+
+
+## Summary
+
+Above, we created two new data sets (client data compare and medstar compare) that contained only the subset of variables we wanted to use for linking records between them. Now that we have an Identifier that links the records, we want to merge it with the original data sets (client data and medstar), which contain the variables that we are actually interested in.
+
+[top](#top)
+
+&nbsp;
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Merge matched APS rows back with client data {#merge-client-data}
+
+-------------------------------------------------------------------------------
+
+## Subset aps rows from pairs_possible_matches
+
+Remember that aps client data is data1 (first row in pair of rows), and MedStar data is data2 (second row in pair of rows).
+
+The APS rows and MedStar rows can always be relinked using the "pair" variable created above.
+
+```{r}
+possible_matches_aps <- pairs_possible_matches %>% filter(row %% 2 == 1)
+```
+
+
+## Create id variable in client data for matching with id variable in possible_matches_aps
+
+Above, when we used the getPairs function, each row in the weighted_pairs data was assigned an id number. That id number corresponds to the row in the original data frame that record came from. For example, the first row of a given pair has id = 28. Because the first row in a pair of rows comes from the client data dataset, and because the id number corresponds to the row in the original dataset, we know that that particular row in the pairs data comes from row 28 of the client data. We can use this to match our pairs back up with the original data.
+
+Additionally, using the select function below we drop variable names that will conflict during merge (e.g. "case_num.x""). I previously checked to make sure the all the .x and .y variables are identical.
+
+```{r}
+client_data_subset <- client_data %>% 
+  mutate(id = row_number()) %>% 
+  select(case_num:full_name, age:id)
+```
+
+
+## Merge possible_matches_aps with APS client data
+
+```{r}
+client_data_w_pair <- possible_matches_aps %>% 
+  left_join(client_data_subset, by = "id") %>% 
+  select(id, row, pair, everything())
+
+about_data(client_data_w_pair) # 132 observations and 19 variables
+```
+
+```{r}
+rm(client_data_subset, possible_matches_aps)
+```
+
+
+## Summary
+
+The new dataset we just created is the APS client data that we started with, altered in the following ways:    
+
+* It's 132 rows instead of 747 rows - the number of rows that have a possible match in the medstar detect data   
+
+* It contains a variable called "pair" that we can use to link each record with a possible match in the medstar detect data.
+
+[top](#top)
+
+&nbsp;
+
+
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Merge matched DETECT rows back with MedStar data {#merge-detect-data}
+
+-------------------------------------------------------------------------------
+
+## Subset DETECT rows from pairs_possible_matches
+
+Remember that aps client data is data1 (first row in pair of rows), and MedStar data is data2 (second row in pair of rows).
+
+The APS rows and MedStar rows can always be relinked using the "pair" variable created above.
+
+```{r}
+possible_matches_detect <- pairs_possible_matches %>% filter(row %% 2 == 0)
+```
+
+
+## Create id variable in medstar_detect for matching with id variable in possible_matches_detect
+
+Above, when we used the getPairs function, each row in the weighted_pairs data was assigned an id number. That id number corresponds to the row in the original data frame that record came from. For example, the second row of a given pair has id = 100. Because the second row in a pair of rows comes from the medstar detect dataset, and because the id number corresponds to the row in the original dataset, we know that that particular row in the pairs data comes from row 100 of the medstar detect data. We can use this to match our pairs back up with the original data.
+
+Additionally, using the select function below we drop variable names that will conflict during merge (e.g. "first_name.x""). I previously checked to make sure the all the .x and .y variables are identical.
+
+```{r}
+medstar_detect_subset <- medstar_detect %>% 
+  mutate(id = row_number()) %>% 
+  select(id, response_date:adls61)
+```
+
+
+## Merge possible matches detect with medstar detect data
+
+```{r}
+medstar_detect_w_pair <- possible_matches_detect %>% 
+  left_join(medstar_detect_subset, by = "id") %>% 
+  select(id, row, pair, everything())
+
+about_data(medstar_detect_w_pair) # 132 observations and 46 variables
+```
+
+```{r}
+rm(medstar_detect_subset, pairs_possible_matches, possible_matches_detect)
+```
+
+
+## Summary
+
+The new dataset we just created is the medstar detect data that we started with, altered in the following ways:    
+
+* It's 132 rows instead of 1,247 rows - the number of rows that have a possible match in the APS client data   
+
+* It contains a variable called "pair" that we can use to link each record with a possible match in the APS client data.
+
+Right now, id is just the row that particular 911 response happened to occupy in the MedStar data, and the row that the investigation happened to occupy in the APS data.
+
+Currently, each person has at least two id numbers associated with them (one that is equal to the MedStar row, and one that is equal to the APS row). Obviously, if they appear in either data frame more than once, then they will have more than 2 id numbers.
+
+[top](#top)
+
+&nbsp;
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Check incident call numbers reported to MedStar compliance {#check-response}
+
+-------------------------------------------------------------------------------
+
+Check to see if all the response numbers from the MedStar compliance data exist in the medstar detect with pair data.  
+
+```{r}
+about_data(response_ids) # 14 observations and 1 variables
+```
+
+
+We begin with 9 incident call numbers saved from the MedStar legal compliance data.
+
+anti_join returns all rows in MedStar's legal compliance data that do not have a match in the MedStar DETECT screening items data that was matched to APS cases (results hidden to protect participant privacy).
+
+```{r}
+medstar_compliance_deidentified %>% 
+  anti_join(medstar_detect_w_pair, by = "incident_call_number") %>%  
+  unique() # 2 incident call numbers
+
+response_ids %>% 
+  anti_join(medstar_detect_w_pair %>% 
+              group_by(incident_pcr_number) %>% 
+              filter(row_number() == 1), 
+            by = c("response_num" = "incident_call_number")) %>%  
+  unique() # 6 incident call numbers
+```
+
+
+There are 2 incidence call numbers in the MedStar compliance data that don't appear in the MedStar DETECT screening items data that was matched to APS cases. I have an email from MedStar from 2016-10-10 outlining the discrepancy. One incident call number (1882) had all nulls for the DETECT screening items. It isn't clear why 1138 is not showing up in the matched data. below we investigate.
+
+Are those same response numbers also missing from the full medstar detect dataset (results hidden to protect participant privacy)?
+
+```{r}
+medstar_compliance_deidentified %>% 
+  anti_join(medstar_detect, by = "incident_call_number") # 1 incident call number
+```
+
+
+There is 1 (not 2) incident call numbers that appear in Medstar's legal compliance data, but not in the MedStar DETECT data. So, incident call number 1138 is in the compliance data. It's also in the medstar_detect data. But, it is not in the medstar detect data that was paired with APS data.
+
+Now we inspect the full record for incident call number 1138 (results hidden to protect participant privacy). After inspection (code was deleted to protect participant privacy), it appears as though that person had a Dallas address. I also checked our APS data manually for that person's name. So, it appears as though the medic provided service in Dallas, completed a DETECT screening for that person, made a report to APS, and came back to MedStar and made the legal compliance department aware of the report to APS. However, because the data we received from APS does not include Dallas county, we are unable to pair that DETECT screening with an APS investigation.
+
+
+## Count how many times those response numbers appear
+
+Count how many times (i.e., repeats) the 7 response numbers from above appear in the MedStar DETECT screening items data that was matched to APS cases.
+
+semi_join returns all rows in MedStar's legal compliance data that have a match in the MedStar DETECT screening items data that was matched to APS cases (results hidden to protect participant privacy).
+
+```{r}
+medstar_detect_w_pair %>% 
+  filter(
+    incident_call_number %in% (
+      medstar_compliance_deidentified %>% 
+        semi_join(medstar_detect_w_pair, by = "incident_call_number") %>% 
+        pull(incident_call_number)
+    )
+  ) %>% 
+  arrange(incident_call_number) %>% 
+  summarise(
+    `Unique Numbers` = unique(incident_call_number) %>% length(), # 7
+    `Total Rows`     = n() # 11
+  )
+```
+
+
+## Add compliance indicator variable
+
+Add a variable to the data to indicate if the response number in each row was also in the MedStar legal compliance data.
+
+```{r}
+medstar_detect_w_pair <- medstar_detect_w_pair %>% 
+  mutate(
+    compliance_match = incident_call_number %in% 
+      pull(medstar_compliance_deidentified, incident_call_number)
+  )
+
+about_data(medstar_detect_w_pair) # 132 observations and 47 variables
+```
+
+```{r}
+rm(medstar_compliance_deidentified)
+```
+
+
+## Summary
+
+There are 2 incident call numbers in the MedStar compliance data that don't appear in the MedStar DETECT screening items data that was matched to APS cases. According to an email from MedStar from 2016-10-10, one incident call number (1882) had all nulls for the DETECT screening items. After inspection, it appears as though the other incident call number (1138) had a Dallas address.
+
+As expected, there are 7 matching response numbers in the MedStar DETECT screening items data that was matched to APS cases. However, those response numbers appear in 11 different rows. I manually inspected those rows and found two response numbers that appear twice and one response number that appears three times. We filter out duplicates below.
+
+[top](#top)
+
+&nbsp;
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Appending the MedStar and APS data back together {#append}
+
+-------------------------------------------------------------------------------
+
+So far, we have:
+
+* Found records in the MedStar DETECT screening data that have a match - based on name and date of birth - in the APS client data. But, this matched data only contained name and date of birth information.
+
+* We gave each pair of those matching records a unique pair number (pairs_possible_matches)
+
+* We split the paired data into two datasets: records that came from the MedStar data (possible_matches_detect) and records that came from the APS data (possible_matches_aps).
+
+* We then merged the records that have a match in the other dataset with variables of substantive interest from the original data those records came from -- retaining the unique pair number (medstar_detect_w_pair & client_data_w_pair).
+
+In this section, we want to bind medstar_detect_w_pair & client_data_w_pair back into a single data frame.
+
+
+## Append and then sort by row.
+
+```{r}
+append_aps_detect_w_pair <- medstar_detect_w_pair %>% 
+  bind_rows(client_data_w_pair) %>% 
+  arrange(row)
+
+about_data(append_aps_detect_w_pair) # 264 observations and 51 variables
+```
+
+
+## Set all NULL values to NA   
+
+```{r to_na}
+append_aps_detect_w_pair <- append_aps_detect_w_pair %>%
+  # Null to NA
+  map_if(
+    .p = is.character, 
+    .f = function(x) {
+      x[x == "NULL"] <- NA 
+      x
+    }
+  ) %>%
+  as_tibble()
+```
+
+
+## Share info between rows (between the MedStar and APS data)
+
+1. Carry forward APS info into the even (medstar detect data) rows    
+2. Carry backward medstar response date into the odd (APS client info) rows   
+
+
+### Is there missingness in key variables that we need to worry about?
+
+```{r}
+sum(is.na(client_data$case_num))
+sum(is.na(client_data$intake_stage))
+sum(is.na(client_data$intake_start))
+sum(is.na(medstar_detect$response_date))
+```
+
+
+## No missing - perform na.locf
+
+```{r}
+append_aps_detect_w_pair <- append_aps_detect_w_pair %>% 
+  map_at(
+    .at = c("case_num", "intake_stage", "intake_start", "county"), 
+    .f = zoo::na.locf
+  ) %>%
+  map_at(
+    .at = c("Weight", "response_num", "response_date", "compliance_match"), 
+    .f = zoo::na.locf, fromLast = TRUE
+  ) %>% 
+  as_tibble()
+
+about_data(append_aps_detect_w_pair) # 264 observations and 51 variables
+```
+
+```{r}
+rm(client_data_w_pair, medstar_detect_w_pair)
+```
+
+
+## Summary
+
+We now have a single data frame, append_aps_detect_w_pair, that contains possible matched pairs of rows (on name and date of birth) from the APS client data and the MedStar DETECT screening data. 
+
+Next, we will do a more thorough check of the possible matched pairs. We will make sure that they are actually matched pairs, and that they are not duplicates.
+
+[top](#top)
+
+&nbsp;
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Clean appended data - possible matched pairs {#clean-pairs}
+
+-------------------------------------------------------------------------------
+
+We now have a single data frame, append_aps_detect_w_pair, that contains possible matched pairs of rows (on name and date of birth) from the APS client data and the MedStar DETECT screening data. 
+
+Next, we will do a more thorough check of the possible matched pairs. We will make sure that they are actually matched pairs, and that they are not duplicates.
+
+
+## Manually inspect all pairs with weight < 1.0 (Not a perfect match) 
+
+(results hidden to protect participant privacy)
+
+```{r eval=FALSE}
+append_aps_detect_w_pair %>% 
+  filter(Weight < 1)
+```
+
+After manual inspection, the last true match has a weight of 0.8320895. Will drop all rows with a weight < 0.8320895.
+
+```{r}
+append_aps_detect_w_pair <- append_aps_detect_w_pair %>% 
+  filter(Weight >= 0.8320895)
+
+about_data(append_aps_detect_w_pair) # 182 observations and 51 variables
+```
+
+
+## How many DETECT screenings have a match in the APS outcomes data?
+
+```{r}
+append_aps_detect_w_pair %>% 
+  filter(row_number() %% 2 == 1) %>% # Keep only the MedStar rows
+  distinct(id) %>% 
+  nrow()
+```
+
+
+## How many compliance data matches remain?
+
+```{r}
+append_aps_detect_w_pair %>% 
+  group_by(compliance_match) %>% 
+  summarise(n()) # 22 as expected
+```
+
+
+## Reporting order
+
+* **response_date** is when MedStar responded to the 911 call. 
+
+* **intake_start** is when APS started the intake. 
+
+Logically, the response_date must be before the intake_start in order for the DETECT tool to have predicted abuse. Take a look at matches where the opposite is true (results hidden to protect participant privacy).
+
+```{r eval=FALSE}
+append_aps_detect_w_pair %>% 
+  filter(response_date > intake_start) # 70 rows
+```
+
+
+## Check response numbers
+
+Check to see if any of the response numbers from the MedStar compliance data exist in the data that will be dropped. 
+
+```{r}
+append_aps_detect_w_pair %>% 
+  filter(response_date > intake_start) %>% 
+  group_by(compliance_match) %>% 
+  summarise(n())
+```
+
+None of the response id numbers from the MedStar compliance data are among the records that will be dropped because of reporting order. I also checked the data manually. aps_report_num is NA in all rows of temp.
+
+
+## Drop pairs when MedStar response date is after APS intake date  
+
+```{r}
+append_aps_detect_w_pair <- append_aps_detect_w_pair %>% 
+  filter(response_date <= intake_start)
+
+about_data(append_aps_detect_w_pair) # 112 observations and 51 variables
+```
+
+* Updated on 2017-01-28: changed from response_date < intake_start to response_date <= intake_start. Remember, intake_start is just APS receiving a report.
+
+
+## Time to intake
+
+Calculate time between response date and intake
+
+```{r}
+append_aps_detect_w_pair <- append_aps_detect_w_pair %>% 
+  mutate(time_diff = difftime(intake_start, response_date, units = "days"))
+
+about_data(append_aps_detect_w_pair) # 112 observations and 52 variables
+```
+
+
+## Create two new variables to retain the MedStar and APS ID's
+
+In the past I dropped these. Decided to keep them in order to better understand where the rows in my final analysis come from.
+
+Remember that aps client data is data1 (first row in pair of rows), and MedStar data is data2 (second row in pair of rows).
+
+```{r}
+append_aps_detect_w_pair <- append_aps_detect_w_pair %>% 
+  group_by(pair) %>% 
+  mutate(
+    msid  = ifelse(row %% 2 == 0, id, NA),
+    apsid = ifelse(row %% 2 == 1, id, NA),
+    msid  = zoo::na.locf(msid, fromLast = TRUE),
+    apsid = zoo::na.locf(apsid)
+  ) %>% 
+  ungroup()
+
+about_data(append_aps_detect_w_pair) # 112 observations and 54 variables
+```
+
+
+Double-checked. msid and apsid were carried forward correctly. I also checked to make sure that the do, in fact, correspond the the row numbers of the original medstar and client_data data frames.
+
+
+## Drop the id column and move msid and apsid to the front of the tibble
+
+```{r}
+append_aps_detect_w_pair <- append_aps_detect_w_pair %>% 
+  select(msid, apsid, row, pair, everything(), -id)
+
+about_data(append_aps_detect_w_pair) # 112 observations and 53 variables
+```
+
+
+## Collapse rows
+
+Even rows (MedStar rows) contain all the APS information. So, just keep the even rows.
+
+```{r}
+append_aps_detect <- append_aps_detect_w_pair %>% 
+  filter(row %% 2 == 0)
+
+about_data(append_aps_detect) # 56 observations and 53 variables
+```
+
+
+## Make sure that each row is unique to a person / DETECT screening date
+
+![](../images/aps_identifiers.png)
+
+* **Case number definition**: APS case / investigation number.
+
+* **Intake stage definition**: That's an ID number assigned to the Intake. Each Intake (Report to APS) has its own number. A single case may have more than one intake. For example, on the first tab of the spreadsheet, you can see that case # XXXXXX has two intakes associated with it, 9 days apart, each with their own ID number. On the second tab of the spreadsheet, which provides allegations associated with each intake, you can see that each of the two intakes associated with this case have a number of allegations.
+
+* **Intake start definition**: An intake is the submission or receipt of a report of abuse - a phone call or web-based. The Intake Start Date refers to the date the staff member opens a new record to begin recording the report. In the case of a phone call they have picked up from a caller on the abuse hotline, the intake starts when the Intake worker begins to speak to the individual, open the record and begin recording what they are hearing. In the case of reports made using the web-based system, intake begins when the Intake worker pulls the web-report and begins processing it in the system. There is the possibility that the intake may begin on one day but not end until the next day.
+
+![](../images/medstar_detect_identifiers.png)
+
+* **Incident call number** is unique to the incident/respnse (#2 in the diagram). In cases where there was more than one person screened at an incident/response, the response number is not unique to the person/screening (#3 and #4 in the diagram).
+    
+* **Incident PCR number** is unique to the person/DETECT screening at a given incident/response. NOTE: No two people should have the same incident PCR number; however, a single person may have multiple incident PCR numbers if they were treated by MedStar on multiple occasions.
+
+* **Response date definition**: Day that MedStar ran the 911 call and filled out the DETECT screening tool.
+
+If a row is unique to a person / DETECT screening date, then the incident PCR number should be unique.
+
+```{r}
+append_aps_detect %>% 
+  select(incident_pcr_number, everything()) %>% 
+  arrange(incident_pcr_number) %>% 
+  group_by(incident_pcr_number) %>% 
+  mutate(count = row_number() %>% max()) %>% 
+  filter(count > 1) %>% # Stop here to view duplicates
+  summarise(Duplicates = duplicated(incident_pcr_number) %>% sum()) %>% 
+  ungroup() %>% 
+  summarise(
+    `Duplicate PCR Numbers`  = n(), # 9
+    `Duplicate Rows`         = sum(Duplicates) # 10
+  ) 
+```
+
+There are 9 incident PCR numbers that appear in more than one row. One combination appears in three rows (2 duplicates) for a total of 10 rows with a duplicated combination (19 rows total). Investigate these manually.
+
+
+## Rules for dropping duplicates
+
+In this context, duplicates are in terms of person and response date (date DETECT screening tool was used). These may arise for a number of reasons. In general, we have no way of knowing which (if any) investigation was truly a result of DETECT. Therefore, our goal is to retain one row for each DETECT screening, and pair it with the corresponding APS investigation (on the same person, of course) that was temporally closest to the screening.
+
+1. If two DETECT screenings are completed for the same person in a single day, then that person will have two records in the MedStar data with identical response dates. However, they aren't really duplicates. They are two different screenings, potentially completed by two different people. The predictive performance of both screenings should be analyzed.
+
+2. For any given screening in the MedStar data that was matched to multiple investigations (on the same person, of course) in the APS data, we keep the row with the shortest amount of time between screening and intake_start.
+
+3. When two rows differ only by intake stage, it means that there was one MedStar screening and one APS investigation, but the investigation was prompted by two or more separate reports. Therefore, one row is simply duplicate information, and retaining both would essentially up weight the influence of that particular screening / outcome combination. Choosing the row to drop is arbitrary. For consistency, we will always drop the second row.
+
+
+## Application of the dropping rules in this data
+
+* Rows 8 and 10 only differ by intake stage. Row 10 will be dropped.
+
+* For rows 112 and 126 one DETECT screening was matched with two different APS investigations (incident call numbers). We have no way of knowing which (if any) investigation was truly a result of DETECT. Therefore, in cases like this we will keep the row with the shortest amount of time between screening and intake start. In this specific case we will drop row 126.
+
+* Rows 84 and 86 only differ by intake stage. Row 86 will be dropped.
+
+* For rows 88 and 156 one DETECT screening was matched with two different APS investigations (incident call numbers). We have no way of knowing which (if any) investigation was truly a result of DETECT. Therefore, in cases like this we will keep the row with the shortest amount of time between screening and intake start. In this specific case we will drop row 156.
+
+* Rows 106 and 108 only differ by intake stage. Row 108 will be dropped.
+
+* For rows 110 and 124 one DETECT screening was matched with two different APS investigations (incident call numbers). We have no way of knowing which (if any) investigation was truly a result of DETECT. Therefore, in cases like this we will keep the row with the shortest amount of time between screening and intake start. In this specific case we will drop row 124.
+
+* Rows 114, 116 and 118 only differ by intake stage. Rows 116 and 118 will be dropped.
+
+* Rows 4 and 6 only differ by intake stage. Row 6 will be dropped.
+
+* Rows 134 and 136 only differ by intake stage. Row 136 will be dropped.
+
+
+## Drop duplicate rows and the compare variable
+
+```{r}
+append_aps_detect <- append_aps_detect %>% 
+  filter(!(row %in% c(6, 126, 124, 86, 10, 156, 136, 108, 116, 118)))
+
+about_data(append_aps_detect) # 46 observations and 53 variables
+```
+
+
+## Final manual inspection   
+
+1. Visually inspect rows for a match   
+2. Make sure that each pair is unique to a person / DETECT screening date 
+
+There are still people who appear in the data more than once. However, they these people have a separate DETECT screening associated with each of their records. 
+
+We don't know which DETECT screening (if any) was the cause of the APS investigation it's being linked with. Currently, this isn't really an issue because we aren't using this data to determine if DETECT is increasing reports or not. We are getting that information from MedStar compliance. With this data, we are simply evaluating whether or not a "yes" response on any given screening is predictive of a valid investigation - regardless of the report that initiated it.
+
+The data we currently have meets that criteria. We have a completed DETECT screening. That DETECT screening is paired with an APS investigation for the same person, which was carried out shortly after the DETECT screening occurred.
+
+It's still possible that our analysis data could be dominated by results from just a handful of people. We will have to check the records we end up using in the final analysis.
+
+
+## Are all 7 of the compliance cases still in the data?
+
+```{r}
+append_aps_detect %>% 
+  group_by(compliance_match) %>% 
+  summarise(n())
+```
+
+```{r}
+rm(append_aps_detect_w_pair)
+```
+
+
+## Summary
+
+In the section above we:
+
+* Manually inspected the possible matched pairs of records. The last true match had a weight of 0.8320895. We dropped all rows with a weight < 0.8320895.
+
+* Logically, the response_date must be before the intake_start in order for the DETECT tool to have predicted abuse. So, we dropped all records with a response_date (MedStar) > the intake_start date (APS).
+
+* At that point, both rows of data in each pair of records had identical data. Therefore, we kept only one row from each pair.
+
+* Finally, we removed duplicate rows (in terms of name and response date) using rules described at length above.
+
+We now have a single data frame (46 observations and 52 variables), append_aps_detect, that contains APS client data matched to MedStar DETECT screenings on name and date of birth.
+
+[top](#top)
+
+&nbsp;
+
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Merge with other APS data {#merge-aps}
+
+-------------------------------------------------------------------------------
+
+How many unique case numbers are in the APS client data matched to MedStar DETECT screenings on name and date of birth?
+
+```{r}
+append_aps_detect %>% 
+  summarise(`Unique Cases` = unique(case_num) %>% length()) # 41
+```
+
+
+## For easier visual inspection, just keep the case numbers of interest
+
+```{r}
+allegations_subset <- allegations %>% 
+  filter(case_num %in% pull(append_aps_detect, case_num))
+
+about_data(allegations_subset) # 66 observations and 4 variables
+```
+
+```{r}
+closure_subset <- closure %>% 
+  filter(case_num %in% pull(append_aps_detect, case_num))
+
+about_data(closure_subset) # 50 observations and 3 variables
+```
+
+```{r}
+disposition_subset <- disposition %>% 
+  filter(case_num %in% pull(append_aps_detect, case_num))
+
+about_data(disposition_subset) # 61 observations and 5 variables
+```
+
+```{r}
+rm(allegations, closure, disposition)
+```
+
+First, we filtered out case numbers that didn't match case numbers in the APS client data matched to MedStar DETECT screenings on name and date of birth (41 unique case numbers). 
+
+Before merging there were 66 rows in the allegations data, 50 rows in the closure data, and 61 rows in the disposition data. Some cases include more than one allegation. They may also include multiple intakes/reporters, and perpetrators. 
+
+1. **Allegations** contains a row for each combination of case number, intake stage (reporter), allegation and perpetrator.    
+
+2. **Disposition** contains a row for each combination of case number, allegation, and perpetrator, but does not differentiate between intake stage numbers (reporter).   
+
+3. **Closure** contains a row for each combination of case number and intake stage; however, the actual closure reason is constant across rows within case number.    
+
+For the purposes of the current analysis we aren’t so concerned with who reported the abuse. Ultimately, we do want EMTs to report more often when appropriate; however, the aim of the current analysis is just to investigate the predictive performance of the screening items. We are just concerned with whether or not the tool accurately predicted abuse - regardless of who reported it.
+
+Therefore, we will drop all rows in allegation that only differ by intake stage. This will make for a cleaner merge below.
+
+
+## Drop intake_stage and perp_id
+
+```{r}
+allegations_subset <- allegations_subset %>% select(case_num, allegation, perp)
+about_data(allegations_subset) # 66 observations and 3 variables
+```
+
+
+## Remove duplicate rows
+
+```{r}
+allegations_subset <- distinct(allegations_subset)
+about_data(allegations_subset) # 57 observations and 3 variables
+```
+
+
+## Allegations at intake vs. allegations at investigation
+
+APS writes of the difference between allegation at intake (in the allegations file) and allegations at investigation (in the disposition file):
+
+> At the time of intake, the intake worker will listen to the allegations and categorize them based on what they are hearing from the caller. Once the investigator gets involved and begins work on the case, they may revise or more often add to the allegations as they flesh out the situation. As they investigate, they often discover new allegations relevant to the case. There has to be a unique allegation for every perpetrator, so as the investigation proceeds and more than one perpetrator may be involved (including self-- very often both self-neglect and ANE by another are co-occurring), the number of allegations per case can multiply.
+
+Next, we will check to make sure that all allegations (at intake and at investigation) are retained, and that they have a corresponding disposition and closure reason.
+
+```{r}
+check <- left_join(allegations_subset, disposition_subset, by = c("case_num"))
+
+# Are there any cases of an allegation/perpetrator in allegation.x/perp.x that doesn't exist in allegation.y/perp.y?
+check2 <- check %>% 
+  group_by(case_num) %>%
+  mutate(
+    combox = paste0(allegation.x, perp.x),
+    comboy = paste0(allegation.y, perp.y),
+    xiny   = ifelse(combox %in% comboy, TRUE, FALSE)
+  )
+
+# All say true. Just to make sure it's doing what I think it should be doing, I'm going to embed a fake value.
+# check3 <- check
+# check3[4, 2] <- "Exploitation" 
+# check4 <- check3 %>% 
+#   group_by(case_num) %>%
+#   mutate(
+#     combox = paste0(allegation.x, perp.x),
+#     comboy = paste0(allegation.y, perp.y),
+#     xiny   = ifelse(combox %in% comboy, TRUE, FALSE)
+#   )
+# Works as expected
+rm(check, check2)
+cat("Done")
+```
+
+After data checks:  
+
+1. Must do a left_join on case number only. Otherwise, allegations at investigation (from disposition) are lost.     
+
+2. After left join, allegation.x and perp.x no longer contain any unique information and can be dropped.    
+3. Finally, we need to clean up the data by renaming allegation.y and perp.y, and dropping duplicate rows.
+
+
+## Merge [allegations](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_1340.asp#APS_1340) and [disposition](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2700.asp#APS_2700)
+
+```{r}
+ad <- left_join(allegations_subset, disposition_subset, by = c("case_num")) %>%
+  mutate(
+    allegation.x = NULL, 
+    perp.x = NULL) %>%
+  rename(
+    allegation = allegation.y,
+    perp = perp.y) %>%
+  distinct
+
+about_data(ad) # 61 observations and 5 variables 
+```
+
+
+## Merge with [closure reason](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2800.asp#APS_2900)
+
+```{r}
+# Remove intake stage
+closure_subset <- closure_subset[, -2]
+
+# Remove duplicate rows (There is only one closure reason per case number)
+closure_subset <- distinct(closure_subset)
+
+# Join
+adc <- left_join(ad, closure_subset, by = "case_num")
+
+about_data(adc) # 61 observations and 6 variables in the data
+```
+
+
+## Merge with linked MedStar and client data
+
+In some cases there are multiple rows per case number. In all of those cases it's because of differing response numbers / dates. In other words, MedStar completed DETECT on a person more than once, but they were close enough to each other in time, that APS only performed one investigation. In those cases, we will keep both rows.
+
+```{r}
+merged <- left_join(append_aps_detect, adc, by = "case_num")
+
+# Look for duplicate rows
+sum(duplicated(merged)) # None
+```
+
+```{r}
+about_data(merged) # 67 observations and 58 variables
+```
+
+
+## Total unique matched records
+
+We just added a bunch of extra rows to the data (multiple allegations, perps, etc.). However, we should still have the same number of unique pairs the APS client data matched to MedStar DETECT screenings on name and date of birth.
+
+```{r}
+append_aps_detect %>% summarise(`Unique Pair` = unique(pair) %>% length) # 46
+```
+
+```{r}
+merged %>% summarise(`Unique Pair` = unique(pair) %>% length) # 46
+```
+
+
+## Are all 7 of the compliance cases still in the data?
+
+```{r}
+merged %>% 
+  filter(compliance_match == 1) %>% 
+  summarise(`Compliance Cases` = unique(pair) %>% length())
+```
+
+
+## Coerce selected character vectors to factors   
+
+To improve readability of codebook
+
+```{r to_factor}
+merged <- merged %>%
+  map_at(
+    .at = c("msid", "apsid", "row", "pair", "birth_month", "birth_day", "birth_year", "Weight", 
+            "incident_call_number", "incident_pcr_number", "case_num", "intake_stage", "zip",
+            "aps_report_num", "allegation", "perp", "disposition", "closure_reason"),
+    .f = factor
+  ) %>%
+  as_tibble()
+```
+
+```{r}
+rm(ad, adc, allegations_subset, append_aps_detect, client_data, closure_subset, 
+   disposition_subset, medstar_detect)
+```
+
+
+## Summary
+
+In the section above we joined the APS allegations data, APS closure reason data, and APS allegation dispositions data with the single data frame (46 observations and 52 variables), append_aps_detect, that contained APS client data matched to MedStar DETECT screenings on name and date of birth. This new data frame is called merged.
+
+[top](#top)
+
+&nbsp;
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------
+
+# Save merged data {#save}
+
+-------------------------------------------------------------------------------
+
+```{r}
+feather::write_feather(merged, path = "/Users/bradcannell/Desktop/merged.feather")
+```
+
+
+## References 
+
+Contiero, P., Tittarelli, A., Tagliabue, G., Maghini, A., Fabiano, S., Crosignani, P., & Tessandori, R. (2005). The EpiLink Record Linkage Software Presentation and Results of Linkage Test on Cancer Registry Files. Methods Archive, 44(1), 66-71.
+
+Sariyar, M., & Borg, A. (2010). The RecordLinkage package: Detecting errors in data. The R Journal, 2(2), 61-67.
+
+Winkler, W. (1990). String comparator metrics and enhanced decision rules in the Fellegi-Sunter model of record linkage. Available from http://eric.ed.gov/?id=ED325505.
+
+
+```{r echo=FALSE}
+sessionInfo()
+```

@@ -48,7 +48,7 @@ library(bfuncs)
 Imported and cleaned in data_medstar_compliance_01_import.Rmd
 
 ```{r}
-response_ids <- feather::read_feather("/Volumes/sph_research/Detect/response_ids.feather")
+response_ids <- feather::read_feather("/Volumes/Detect/response_ids.feather")
 ```
 
 
@@ -104,7 +104,7 @@ col_info <- c(
 
 # Import data
 medstar_detect <- readxl::read_excel(
-  path = "/Volumes/sph_research/Detect/DETECT_DATA_PIVOT.xlsx",
+  path = "/Volumes/Detect/DETECT_DATA_PIVOT.xlsx",
   col_names = col_info[seq(1, length(col_info), 2)],
   col_types = col_info[seq(2, length(col_info), 2)],
   skip = 1)
@@ -220,7 +220,7 @@ Because we will merge this data with other data sets in the future based on char
 ```
 
 ```{r}
-vars <- quos(full_name, address)
+vars <- quos(full_name, address, city)
 
 medstar_detect <- medstar_detect %>% 
   mutate_at(vars(!!! vars), tolower) %>% 
@@ -258,7 +258,7 @@ medstar_detect <- medstar_detect %>%
 
 ```{r}
 medstar_detect <- medstar_detect %>%
-  mutate_if(is.character, ~ {.[. == "NULL"] <- NA; .})
+  mutate_if(is.character, ~ {.[. == "NULL" | . == "null"] <- NA; .})
 ```
 
 
@@ -376,7 +376,7 @@ So, the MedStar detect screening data contains 1,247 total rows of data that cor
 # Save current version of the DETECT screening items data {#save}
 
 ```{r}
-feather::write_feather(medstar_detect, "/Volumes/sph_research/Detect/medstar_detect.feather")
+feather::write_feather(medstar_detect, "/Volumes/Detect/medstar_detect.feather")
 ```
 
 [top](#top)

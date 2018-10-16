@@ -174,13 +174,25 @@ Because we will merge this data with other data sets in the future based on char
 ```
 
 ```{r}
-vars <- quos(full_name, first_name, middle_name, last_name, address, city)
+vars <- quos(full_name, first_name, middle_name, last_name, county, address, city)
 
 client_data <- client_data %>% 
   mutate_at(vars(!!! vars), tolower) %>% 
   mutate_at(vars(!!! vars), stringr::str_replace_all, "[^a-zA-Z\\d\\s]", " ") %>%
   mutate_at(vars(!!! vars), stringr::str_replace, "[[:blank:]]$", "") %>% 
   mutate_at(vars(!!! vars), stringr::str_replace_all, "[[:blank:]]{2,}", " ")
+
+rm(vars)
+```
+
+
+## Reformat zip code 
+
+Make zip code 5 digits for joining with MedStar data
+
+```{r}
+client_data <- client_data %>% 
+  mutate(zip = stringr::str_extract(zip, "\\d{5}"))
 ```
 
 ```{r}
@@ -526,10 +538,10 @@ The perpetrator id is tied to a person and is reused across cases.
 # Save data for merge with MedStar data {#save}
 
 ```{r}
-feather::write_feather(client_data, "/Volumes/sph_research/Detect/client_data.feather")
-feather::write_feather(allegations, "/Volumes/sph_research/Detect/allegations.feather")
-feather::write_feather(closure, "/Volumes/sph_research/Detect/closure.feather")
-feather::write_feather(disposition, "/Volumes/sph_research/Detect/disposition.feather")
+feather::write_feather(client_data, "/Volumes/Detect/client_data.feather")
+feather::write_feather(allegations, "/Volumes/Detect/allegations.feather")
+feather::write_feather(closure, "/Volumes/Detect/closure.feather")
+feather::write_feather(disposition, "/Volumes/Detect/disposition.feather")
 ```
 
 [top](#top)
