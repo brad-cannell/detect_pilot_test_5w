@@ -1,0 +1,65 @@
+---
+title: "Deidentify Merged MedStar and APS Data"
+date: "Created: 2018-10-16 <br> Updated: `r Sys.Date()`"
+output: 
+  html_notebook:
+    css: custom-css.css
+---
+
+# Table of contents
+
+* [Overview](#overview)   
+* [Load packages and data](#load)   
+* []   
+
+# Overview
+
+Remove identifiers from the merged MedStar/APS data so that it can be uploaded to [NACJD]( https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html)
+
+# Load packages and data {#load}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+Sys.setenv(TZ = "US/Central")
+```
+
+```{r message=FALSE}
+library(tidyverse)
+library(bfuncs)
+```
+
+Merged MedStar and APS data. Created in data_medstar_aps_merged_01_merge.Rmd
+
+```{r}
+medstar_aps_merged <- feather::read_feather("/Volumes/Detect/medstar_aps_merged.feather")
+```
+
+```{r}
+about_data(medstar_aps_merged) # 64,837 observations and 61 variables
+```
+
+
+
+
+
+
+
+
+
+
+# Section 1 {#section-1}
+
+```{r}
+
+```
+
+[top](#top)
+
+
+&nbsp;
+
+-------------------------------------------------------------------------------
+
+```{r echo=FALSE}
+sessionInfo()
+```

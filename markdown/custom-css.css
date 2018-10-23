@@ -31,6 +31,10 @@ h3 {
   font-size: 11pt;
 }
 
+h4 {
+  margin-top: 25px;
+}
+
 /* Change horizontal rule to light blue */
 hr {
   background-color: #66b3ff;
