@@ -10,11 +10,17 @@ output:
 
 * [Overview](#overview)   
 * [Load packages and data](#load)   
-* []   
+* [Create an anonymous unique person id number](#person-id)   
+* [Deidentify the response numbers for the MedStar legal compliance department](#deidentify-1)   
+* [Deidentify the merged dataset](#deidentify-2)    
+* [Save deidentified version of merged dataset](#save)   
+* [Count rows, unique responses, and unique people](#counts)   
+
 
 # Overview
 
-Remove identifiers from the merged MedStar/APS data so that it can be uploaded to [NACJD]( https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html)
+* Remove identifiers from the merged MedStar/APS data so that it can be uploaded to [NACJD]( https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html) - including a unique person id number.
+
 
 # Load packages and data {#load}
 
@@ -26,6 +32,7 @@ Sys.setenv(TZ = "US/Central")
 ```{r message=FALSE}
 library(tidyverse)
 library(bfuncs)
+library(fastLink)
 ```
 
 Merged MedStar and APS data. Created in data_medstar_aps_merged_01_merge.Rmd
@@ -35,7 +42,22 @@ medstar_aps_merged <- feather::read_feather("/Volumes/Detect/medstar_aps_merged.
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 64,837 observations and 61 variables
+about_data(medstar_aps_merged) # 66,200 observations and 57 variables
+```
+
+
+## Response ID's from MedStar compliance data
+
+These are the response id numbers that correspond to 911 responses where a report was made to APS during the DETECT pilot phase and MedStar compliance was made aware of the report. 
+
+Data from data_medstar_compliance_01_import.Rmd
+
+```{r}
+response_ids <- feather::read_feather("/Volumes/Detect/response_ids.feather")
+```
+
+```{r}
+about_data(response_ids) # 14 observations and 1 variable
 ```
 
 
@@ -47,10 +69,434 @@ about_data(medstar_aps_merged) # 64,837 observations and 61 variables
 
 
 
-# Section 1 {#section-1}
+# Create an anonymous unique person id number {#person-id}
+
+Some people were treated by MedStar and/or investigated by APS more than one time. Therefore, neither incident pcr number nor case number uniquely identifies people. For many measures, this doesn't matter because we are interested in outcomes at the incident level. However, it does matter for a couple of demographic measures like age, race, etc.
+
+Initially, we attempted to uniquely identify people based on a combination of name and DOB. However, creating a unique identifier this way is complicated by data entry errors (i.e., misspelled names and mistyped dates of birth). For example, john_smith_1936_10_03 and jon_smith_1936_10_03 may be the same person, but would generate two different unique id numbers. 
+
+Instead, we can use fastLink to search for names and DOB's that are likely to be the same person and assign them a unique person id.
+
+If we do this on the entire dataset at once, it is a costly process. It becomes much more tractable if we temporarily reduce the data to one row for each combination of values that we want to investigate. In this case, we want to investigate all unique combinations of name, DOB, and address.
+
+## Coerce selected variables to numeric
 
 ```{r}
+medstar_aps_merged <- medstar_aps_merged %>% 
+  
+  # Coerce selected variables to numeric
+  mutate_at(
+    vars(age, birth_year, birth_mnth, birth_day, address_num, zip),
+    as.numeric
+  ) %>% 
+  
+  # Add group variable (combination of values of interest)
+  mutate(
+    group = paste(first_name, last_name, birth_year, birth_mnth, birth_day, address_street, sep = "_")
+  )
+```
 
+```{r}
+about_data(medstar_aps_merged) # 66,200 observations and 58 variables
+```
+
+
+```{r}
+temp <- medstar_aps_merged %>% 
+  # Keep one row for every combination of first name, last name, dob, and address
+  # Can't use pcr because not everybody has one
+  group_by(group) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup()
+```
+
+```{r}
+about_data(temp) # 1,755 observations and 58 variables
+```
+
+```{r}
+fastlink_out <- fastLink(
+  dfA = temp,
+  dfB = temp,
+  varnames = c("first_name", "last_name", "birth_year", "birth_mnth", "birth_day", "address_street"),
+  dedupe.matches = FALSE
+)
+```
+
+```{r}
+fastlink_matches <- tibble(
+  row     = fastlink_out$matches$inds.b,
+  matches = fastlink_out$matches$inds.a
+)
+```
+
+```{r}
+person_key <- fastlink_matches %>%
+  
+  # Get the matches into the form that I need for joining back to the data
+  group_by(row) %>% 
+  mutate(matches = list(matches)) %>% # Create list column
+  ungroup() %>% 
+  mutate(matches = purrr::map_chr(matches, ~ paste(., collapse = ","))) %>% # Turn list into character string
+  select(matches) %>% 
+  distinct() %>% # Reduce to 1 row per group of matches
+  mutate(
+    person_id = row_number(),
+    row = purrr::map(matches, ~ scan(text = ., what = 0L, sep = ",", quiet = TRUE)) # Turn back into list
+  ) %>% 
+  unnest() %>% 
+  select(person_id, row) %>% 
+  
+  # Join to temp
+  right_join(
+    temp %>% 
+      mutate(row = row_number()),
+    by = "row"
+  ) %>% 
+  select(person_id, group)
+```
+
+
+## Data check
+
+Add person id to the full dataset
+
+```{r}
+data_check <- medstar_aps_merged %>% 
+  left_join(person_key, by = "group")
+```
+
+Manually inspect rows with different values that were considered the same person. Look instances when this appears to have been done inappropriately (results hidden to protect privacy).
+
+```{r eval=FALSE}
+data_check %>% 
+  group_by(person_id, first_name, last_name, birth_year, birth_mnth, birth_day, address_street) %>% 
+  filter(row_number() == 1) %>% 
+  arrange(person_id) %>% 
+  select(person_id, everything()) %>% 
+  group_by(person_id) %>% 
+  filter(max(row_number()) > 1)
+```
+
+The process appears to have worked as expected.
+
+
+## Add person id to the full dataset
+
+```{r}
+medstar_aps_merged <- medstar_aps_merged %>% 
+  left_join(person_key, by = "group") %>% 
+  select(-group)
+```
+
+```{r}
+about_data(medstar_aps_merged) # 66,200 observations and 58 variables
+```
+
+
+## Clean up
+
+```{r}
+rm(data_check, fastlink_matches, fastlink_out, person_key, temp)
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Deidentify the response numbers from the MedStar legal compliance department {#deidentify-1}
+
+This has to be done before deidentifying the incient call number.
+
+Check to see if the expectd response numbers from the MedStar compliance data exist in the merged data. 
+
+In data_medstar_detect_screenings_01_import.Rmd there were 8 response id's from the compliance data that had a match in the DETECT screening tool data.
+
+```{r}
+about_data(response_ids) # 14 observations and 1 variables
+```
+
+anti_join returns all rows in MedStar's legal compliance data that do not have a match in the MedStar DETECT screening items data that was matched to APS cases (results hidden to protect participant privacy).
+
+```{r eval=FALSE}
+response_ids %>% 
+  anti_join(medstar_aps_merged %>% 
+              group_by(incident_pcr_number) %>% 
+              filter(row_number() == 1), 
+            by = c("response_num" = "incident_call_number")) %>%  
+  unique() # 6 incident pcr numbers
+```
+
+There are 6 responses id's in the MedStar compliance data that don't appear in the MedStar DETECT screening items data (results hidden to protect participant privacy). 
+
+I have an email from MedStar from 2016-10-10 outlining the discrepancy. One response id had all nulls for the DETECT screening items (...147). One response id could not be found in the query. The rest were ineligible for the DETECT screening tool because of age.
+
+At this point, there should be 8 response id's from the compliance data that have a match in the merged MedStar/APS data (results hidden to protect participant privacy).
+
+```{r eval=FALSE}
+response_ids %>% 
+  semi_join(medstar_aps_merged %>% 
+              group_by(incident_pcr_number) %>% 
+              filter(row_number() == 1), 
+            by = c("response_num" = "incident_call_number")) %>% 
+  unique() # 8 incident pcr numbers
+```
+
+Now we need a way to track these cases going forward without using a number that has meaning in MedStar's database.
+
+We will just add a new variable to the merged data that indicates it was match with the compliance data. 
+
+```{r}
+in_compliance_data <- response_ids %>% 
+  semi_join(medstar_aps_merged %>% 
+              group_by(incident_pcr_number) %>% 
+              filter(row_number() == 1), 
+            by = c("response_num" = "incident_call_number")) %>% 
+  unique() %>% 
+  mutate(in_compliance_data = 1L)
+```
+
+```{r}
+medstar_aps_merged <- medstar_aps_merged %>% 
+  left_join(in_compliance_data, by = c("incident_call_number" = "response_num")) %>% 
+  mutate(in_compliance_data = if_else(is.na(in_compliance_data), 0L, in_compliance_data))
+```
+
+```{r}
+about_data(medstar_aps_merged) # 66,200 observations and 59 variables
+```
+
+
+## Data check
+
+At this point, there should be 8 response id's from the compliance data that have a match in the merged MedStar/APS data (results hidden to protect participant privacy).
+
+```{r eval=FALSE}
+medstar_aps_merged %>% 
+  filter(in_compliance_data == 1) %>% 
+  group_by(incident_call_number) %>% 
+  filter(row_number() == 1) # 8 rows
+```
+
+
+## Clean up
+
+```{r}
+rm(in_compliance_data, response_ids)
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Deidentify the merged dataset {#deidentify-2}
+
+We need to create deidentified datasets for [NACJD](https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html).
+
+
+## Save current order of variables
+
+```{r}
+current_order <- names(medstar_aps_merged)
+```
+
+
+## Incident call numbers
+
+```{r}
+medstar_aps_merged <- medstar_aps_merged %>% 
+  select(incident_call_number) %>% 
+  unique() %>% 
+  mutate(new = row_number()) %>% 
+  right_join(medstar_aps_merged, by = "incident_call_number") %>% 
+  # Prevent assigning number to NA
+  mutate(new = if_else(is.na(incident_call_number), NA_integer_, new)) %>% 
+  mutate(incident_call_number = new) %>% 
+  select(-new)
+```
+
+
+## Incident pcr numbers
+
+```{r}
+medstar_aps_merged <- medstar_aps_merged %>% 
+  select(incident_pcr_number) %>% 
+  unique() %>% 
+  mutate(new = row_number()) %>% 
+  right_join(medstar_aps_merged, by = "incident_pcr_number") %>% 
+  # Prevent assigning number to NA
+  mutate(new = if_else(is.na(incident_pcr_number), NA_integer_, new)) %>%
+  mutate(incident_pcr_number = new) %>% 
+  select(-new)
+```
+
+
+## Case numbers
+
+```{r}
+medstar_aps_merged <- medstar_aps_merged %>% 
+  select(case_num) %>% 
+  unique() %>% 
+  mutate(new = row_number()) %>% 
+  right_join(medstar_aps_merged, by = "case_num") %>% 
+  # Prevent assigning number to NA
+  mutate(new = if_else(is.na(case_num), NA_integer_, new)) %>%
+  mutate(case_num = new) %>% 
+  select(-new) %>% 
+  # To force case numbers to start at 1
+  mutate(case_num = case_num - 1)
+```
+
+
+## Crew member id
+
+```{r}
+medstar_aps_merged <- medstar_aps_merged %>%
+  select(crew_member_id) %>% 
+  unique() %>% 
+  mutate(new = row_number()) %>% 
+  right_join(medstar_aps_merged, by = "crew_member_id") %>% 
+  # Prevent assigning number to NA
+  mutate(new = if_else(is.na(crew_member_id), NA_integer_, new)) %>%
+  mutate(crew_member_id = new) %>% 
+  select(-new)
+```
+
+
+## Perp id
+
+```{r}
+medstar_aps_merged <- medstar_aps_merged %>%
+  select(perp_id) %>% 
+  unique() %>% 
+  mutate(new = row_number()) %>% 
+  right_join(medstar_aps_merged, by = "perp_id") %>% 
+  # Prevent assigning number to NA
+  mutate(new = if_else(is.na(perp_id), NA_integer_, new)) %>%
+  mutate(perp_id = new) %>% 
+  select(-new) %>% 
+  # To force perp ids to start at 1
+  mutate(perp_id = perp_id - 1)
+```
+
+
+## Remove the day from all remaining date variables
+
+As part of the process of protecting participant anonymity, we will remove the day from all dates.
+
+```{r}
+medstar_aps_merged <- medstar_aps_merged %>% 
+  mutate(
+    date_entered = format(date_entered, "%Y-%m"),
+    intake_start = format(intake_start, "%Y-%m")
+  )
+```
+
+
+## Remove remaining identifiers
+
+```{r}
+medstar_aps_merged <- medstar_aps_merged %>% 
+  select(-first_name, -last_name, -birth_year, -birth_mnth, -birth_day, -address_num, 
+         -address_street, -city, -zip)
+```
+
+```{r}
+about_data(medstar_aps_merged) # 66,200 observations and 50 variables
+```
+
+
+## Reorder variables
+
+```{r}
+current_order <- setdiff(
+  current_order, 
+  c("first_name", "last_name", "birth_year", "birth_mnth", "birth_day",
+    "address_num", "address_street", "city", "zip")
+)
+```
+
+
+```{r}
+medstar_aps_merged <- medstar_aps_merged %>%
+  select(current_order)
+```
+
+```{r}
+about_data(medstar_aps_merged) # 66,200 observations and 50 variables
+```
+
+
+## Clean up
+
+```{r}
+rm(current_order)
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Save deidentified version of merged dataset {#save}
+
+```{r}
+feather::write_feather(
+  medstar_aps_merged, 
+  "../data/medstar_aps_merged.feather"
+)
+```
+
+```{r}
+readr::write_csv(
+  medstar_aps_merged, 
+  "../data/medstar_aps_merged.csv"
+)
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Count rows, unique responses, and unique people {#counts}
+
+```{r}
+medstar_aps_merged %>% 
+  summarise(
+    `Total Rows` = n(),
+    `Unique Incidents` = unique(incident_call_number) %>% length(),
+    `Unique PCR` = unique(incident_pcr_number) %>% length(),
+    `Unique Case Numbers` = unique(case_num) %>% length(),
+    `Unique People` = unique(person_id) %>% length()
+  ) %>% 
+  mutate_all(format, big.mark = ",")
 ```
 
 [top](#top)

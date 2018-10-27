@@ -1129,7 +1129,8 @@ names(medstar_aps_merged)
 
 ```{r}
 vars_to_keep <- quos(incident_call_number, incident_pcr_number, case_num, date_entered, 
-                     intake_start, first_name, last_name, age, address_num, address_street, 
+                     intake_start, first_name, last_name, birth_year, birth_mnth, birth_day, 
+                     age, address_num, address_street, 
                      city, zip, gender, race, chief_complaint, primary_impression, 
                      primary_symptom, other_symptom, drug_use, crew_member_id, 
                      medical_surgery_hist, current_meds, unusual_odor36:adls61, 
@@ -1141,7 +1142,7 @@ medstar_aps_merged <- medstar_aps_merged %>% select(!!!vars_to_keep)
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 64,837 observations and 49 variables
+about_data(medstar_aps_merged) # 64,837 observations and 52 variables
 ```
 
 ## Check for duplicate rows
@@ -1153,7 +1154,7 @@ medstar_aps_merged <- medstar_aps_merged %>% distinct()
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 64,685 observations and 49 variables
+about_data(medstar_aps_merged) # 64,685 observations and 52 variables
 ```
 
 [top](#top)
@@ -1398,7 +1399,7 @@ response_ids %>%
   unique() # 6 incident pcr numbers
 ```
 
-There arere 6 responses id's in the MedStar compliance data that don't appear in the MedStar DETECT screening items data (results hidden to protect participant privacy). 
+There are 6 responses id's in the MedStar compliance data that don't appear in the MedStar DETECT screening items data (results hidden to protect participant privacy). 
 
 I have an email from MedStar from 2016-10-10 outlining the discrepancy. One response id had all nulls for the DETECT screening items (...147). One response id could not be found in the query. The rest were ineligible for the DETECT screening tool because of age.
 

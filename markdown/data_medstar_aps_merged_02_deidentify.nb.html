@@ -75,7 +75,7 @@ h6 {
 }
 </style>
 
-<link href="data:text/css;charset=utf-8,%0A%0Ah1%20%7B%0Amargin%2Dtop%3A%202cm%3B%0Apadding%2Dbottom%3A%200%2E25cm%3B%0Aborder%2Dbottom%3A%201px%20solid%20%2366b3ff%3B%0Atext%2Dtransform%3A%20capitalize%3B%0A%7D%0A%0Ah2%20%7B%0Amargin%2Dtop%3A%201cm%3B%0Afont%2Dsize%3A%2014pt%3B%0A%7D%0A%0Ah3%20%7B%0Afont%2Dsize%3A%2011pt%3B%0A%7D%0A%0Ahr%20%7B%0Abackground%2Dcolor%3A%20%2366b3ff%3B%0Aheight%3A%201px%3B%0A%7D%0A" rel="stylesheet" type="text/css" />
+<link href="data:text/css;charset=utf-8,%0A%0Ah1%20%7B%0Amargin%2Dtop%3A%202cm%3B%0Apadding%2Dbottom%3A%200%2E25cm%3B%0Aborder%2Dbottom%3A%201px%20solid%20%2366b3ff%3B%0Atext%2Dtransform%3A%20capitalize%3B%0A%7D%0A%0Ah2%20%7B%0Amargin%2Dtop%3A%201cm%3B%0Afont%2Dsize%3A%2014pt%3B%0A%7D%0A%0Ah3%20%7B%0Afont%2Dsize%3A%2011pt%3B%0A%7D%0Ah4%20%7B%0Amargin%2Dtop%3A%2025px%3B%0A%7D%0A%0Ahr%20%7B%0Abackground%2Dcolor%3A%20%2366b3ff%3B%0Aheight%3A%201px%3B%0A%7D%0A" rel="stylesheet" type="text/css" />
 
 </head>
 
@@ -172,7 +172,7 @@ $(document).ready(function () {
 
 
 <h1 class="title toc-ignore">Deidentify Merged MedStar and APS Data</h1>
-<h4 class="date"><em>Created: 2018-10-16 <br> Updated: 2018-10-16</em></h4>
+<h4 class="date"><em>Created: 2018-10-16 <br> Updated: 2018-10-27</em></h4>
 
 </div>
 
@@ -185,12 +185,22 @@ $(document).ready(function () {
 </li>
 <li><a href="#load">Load packages and data</a><br />
 </li>
-<li>[]</li>
+<li><a href="#person-id">Create an anonymous unique person id number</a><br />
+</li>
+<li><a href="#deidentify-1">Deidentify the response numbers for the MedStar legal compliance department</a><br />
+</li>
+<li><a href="#deidentify-2">Deidentify the merged dataset</a><br />
+</li>
+<li><a href="#save">Save deidentified version of merged dataset</a><br />
+</li>
+<li><a href="#counts">Count rows, unique responses, and unique people</a></li>
 </ul>
 </div>
 <div id="overview" class="section level1">
 <h1>Overview</h1>
-<p>Remove identifiers from the merged MedStar/APS data so that it can be uploaded to <a href="https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html">NACJD</a></p>
+<ul>
+<li>Remove identifiers from the merged MedStar/APS data so that it can be uploaded to <a href="https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html">NACJD</a> - including a unique person id number.</li>
+</ul>
 </div>
 <div id="load" class="section level1">
 <h1>Load packages and data</h1>
@@ -198,9 +208,10 @@ $(document).ready(function () {
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeSh0aWR5dmVyc2UpXG5saWJyYXJ5KGJmdW5jcylcbmBgYCJ9 -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeSh0aWR5dmVyc2UpXG5saWJyYXJ5KGJmdW5jcylcbmxpYnJhcnkoZmFzdExpbmspXG5gYGAifQ== -->
 <pre class="r"><code>library(tidyverse)
-library(bfuncs)</code></pre>
+library(bfuncs)
+library(fastLink)</code></pre>
 <!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
@@ -214,19 +225,562 @@ library(bfuncs)</code></pre>
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYWJvdXRfZGF0YShtZWRzdGFyX2Fwc19tZXJnZWQpICMgNjQsODM3IG9ic2VydmF0aW9ucyBhbmQgNjEgdmFyaWFibGVzXG5gYGAifQ== -->
-<pre class="r"><code>about_data(medstar_aps_merged) # 64,837 observations and 61 variables</code></pre>
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYWJvdXRfZGF0YShtZWRzdGFyX2Fwc19tZXJnZWQpICMgNjYsMjAwIG9ic2VydmF0aW9ucyBhbmQgNTcgdmFyaWFibGVzXG5gYGAifQ== -->
+<pre class="r"><code>about_data(medstar_aps_merged) # 66,200 observations and 57 variables</code></pre>
 <!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiWzFdIFwiNjQsODM3IG9ic2VydmF0aW9ucyBhbmQgNjEgdmFyaWFibGVzXCJcbiJ9 -->
-<pre><code>[1] &quot;64,837 observations and 61 variables&quot;</code></pre>
+<!-- rnb-output-begin eyJkYXRhIjoiWzFdIFwiNjYsMjAwIG9ic2VydmF0aW9ucyBhbmQgNTcgdmFyaWFibGVzXCJcbiJ9 -->
+<pre><code>[1] &quot;66,200 observations and 57 variables&quot;</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<div id="response-ids-from-medstar-compliance-data" class="section level2">
+<h2>Response ID’s from MedStar compliance data</h2>
+<p>These are the response id numbers that correspond to 911 responses where a report was made to APS during the DETECT pilot phase and MedStar compliance was made aware of the report.</p>
+<p>Data from data_medstar_compliance_01_import.Rmd</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxucmVzcG9uc2VfaWRzIDwtIGZlYXRoZXI6OnJlYWRfZmVhdGhlcihcIi9Wb2x1bWVzL0RldGVjdC9yZXNwb25zZV9pZHMuZmVhdGhlclwiKVxuYGBgIn0= -->
+<pre class="r"><code>response_ids &lt;- feather::read_feather(&quot;/Volumes/Detect/response_ids.feather&quot;)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYWJvdXRfZGF0YShyZXNwb25zZV9pZHMpICMgMTQgb2JzZXJ2YXRpb25zIGFuZCAxIHZhcmlhYmxlXG5gYGAifQ== -->
+<pre class="r"><code>about_data(response_ids) # 14 observations and 1 variable</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiWzFdIFwiMTQgb2JzZXJ2YXRpb25zIGFuZCAxIHZhcmlhYmxlc1wiXG4ifQ== -->
+<pre><code>[1] &quot;14 observations and 1 variables&quot;</code></pre>
 <!-- rnb-output-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 </div>
-<div id="section-1" class="section level1">
-<h1>Section 1</h1>
+</div>
+<div id="person-id" class="section level1">
+<h1>Create an anonymous unique person id number</h1>
+<p>Some people were treated by MedStar and/or investigated by APS more than one time. Therefore, neither incident pcr number nor case number uniquely identifies people. For many measures, this doesn’t matter because we are interested in outcomes at the incident level. However, it does matter for a couple of demographic measures like age, race, etc.</p>
+<p>Initially, we attempted to uniquely identify people based on a combination of name and DOB. However, creating a unique identifier this way is complicated by data entry errors (i.e., misspelled names and mistyped dates of birth). For example, john_smith_1936_10_03 and jon_smith_1936_10_03 may be the same person, but would generate two different unique id numbers.</p>
+<p>Instead, we can use fastLink to search for names and DOB’s that are likely to be the same person and assign them a unique person id.</p>
+<p>If we do this on the entire dataset at once, it is a costly process. It becomes much more tractable if we temporarily reduce the data to one row for each combination of values that we want to investigate. In this case, we want to investigate all unique combinations of name, DOB, and address.</p>
+<div id="coerce-selected-variables-to-numeric" class="section level2">
+<h2>Coerce selected variables to numeric</h2>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubWVkc3Rhcl9hcHNfbWVyZ2VkIDwtIG1lZHN0YXJfYXBzX21lcmdlZCAlPiUgXG4gIFxuICAjIENvZXJjZSBzZWxlY3RlZCB2YXJpYWJsZXMgdG8gbnVtZXJpY1xuICBtdXRhdGVfYXQoXG4gICAgdmFycyhhZ2UsIGJpcnRoX3llYXIsIGJpcnRoX21udGgsIGJpcnRoX2RheSwgYWRkcmVzc19udW0sIHppcCksXG4gICAgYXMubnVtZXJpY1xuICApICU+JSBcbiAgXG4gICMgQWRkIGdyb3VwIHZhcmlhYmxlIChjb21iaW5hdGlvbiBvZiB2YWx1ZXMgb2YgaW50ZXJlc3QpXG4gIG11dGF0ZShcbiAgICBncm91cCA9IHBhc3RlKGZpcnN0X25hbWUsIGxhc3RfbmFtZSwgYmlydGhfeWVhciwgYmlydGhfbW50aCwgYmlydGhfZGF5LCBhZGRyZXNzX3N0cmVldCwgc2VwID0gXCJfXCIpXG4gIClcbmBgYCJ9 -->
+<pre class="r"><code>medstar_aps_merged &lt;- medstar_aps_merged %&gt;% 
+  
+  # Coerce selected variables to numeric
+  mutate_at(
+    vars(age, birth_year, birth_mnth, birth_day, address_num, zip),
+    as.numeric
+  ) %&gt;% 
+  
+  # Add group variable (combination of values of interest)
+  mutate(
+    group = paste(first_name, last_name, birth_year, birth_mnth, birth_day, address_street, sep = &quot;_&quot;)
+  )</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiTkFzIGludHJvZHVjZWQgYnkgY29lcmNpb25cbiJ9 -->
+<pre><code>NAs introduced by coercion</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYWJvdXRfZGF0YShtZWRzdGFyX2Fwc19tZXJnZWQpICMgNjYsMjAwIG9ic2VydmF0aW9ucyBhbmQgNTggdmFyaWFibGVzXG5gYGAifQ== -->
+<pre class="r"><code>about_data(medstar_aps_merged) # 66,200 observations and 58 variables</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiWzFdIFwiNjYsMjAwIG9ic2VydmF0aW9ucyBhbmQgNTggdmFyaWFibGVzXCJcbiJ9 -->
+<pre><code>[1] &quot;66,200 observations and 58 variables&quot;</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxudGVtcCA8LSBtZWRzdGFyX2Fwc19tZXJnZWQgJT4lIFxuICAjIEtlZXAgb25lIHJvdyBmb3IgZXZlcnkgY29tYmluYXRpb24gb2YgZmlyc3QgbmFtZSwgbGFzdCBuYW1lLCBkb2IsIGFuZCBhZGRyZXNzXG4gICMgQ2FuJ3QgdXNlIHBjciBiZWNhdXNlIG5vdCBldmVyeWJvZHkgaGFzIG9uZVxuICBncm91cF9ieShncm91cCkgJT4lIFxuICBmaWx0ZXIocm93X251bWJlcigpID09IDEpICU+JSBcbiAgdW5ncm91cCgpXG5gYGAifQ== -->
+<pre class="r"><code>temp &lt;- medstar_aps_merged %&gt;% 
+  # Keep one row for every combination of first name, last name, dob, and address
+  # Can't use pcr because not everybody has one
+  group_by(group) %&gt;% 
+  filter(row_number() == 1) %&gt;% 
+  ungroup()</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYWJvdXRfZGF0YSh0ZW1wKSAjIDEsNzU1IG9ic2VydmF0aW9ucyBhbmQgNTggdmFyaWFibGVzXG5gYGAifQ== -->
+<pre class="r"><code>about_data(temp) # 1,755 observations and 58 variables</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiWzFdIFwiMSw3NTUgb2JzZXJ2YXRpb25zIGFuZCA1OCB2YXJpYWJsZXNcIlxuIn0= -->
+<pre><code>[1] &quot;1,755 observations and 58 variables&quot;</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZmFzdGxpbmtfb3V0IDwtIGZhc3RMaW5rKFxuICBkZkEgPSB0ZW1wLFxuICBkZkIgPSB0ZW1wLFxuICB2YXJuYW1lcyA9IGMoXCJmaXJzdF9uYW1lXCIsIFwibGFzdF9uYW1lXCIsIFwiYmlydGhfeWVhclwiLCBcImJpcnRoX21udGhcIiwgXCJiaXJ0aF9kYXlcIiwgXCJhZGRyZXNzX3N0cmVldFwiKSxcbiAgZGVkdXBlLm1hdGNoZXMgPSBGQUxTRVxuKVxuYGBgIn0= -->
+<pre class="r"><code>fastlink_out &lt;- fastLink(
+  dfA = temp,
+  dfB = temp,
+  varnames = c(&quot;first_name&quot;, &quot;last_name&quot;, &quot;birth_year&quot;, &quot;birth_mnth&quot;, &quot;birth_day&quot;, &quot;address_street&quot;),
+  dedupe.matches = FALSE
+)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiXG49PT09PT09PT09PT09PT09PT09PSBcbmZhc3RMaW5rKCk6IEZhc3QgUHJvYmFiaWxpc3RpYyBSZWNvcmQgTGlua2FnZVxuPT09PT09PT09PT09PT09PT09PT0gXG5cbklmIHlvdSBzZXQgcmV0dXJuLmFsbCB0byBGQUxTRSwgeW91IHdpbGwgbm90IGJlIGFibGUgdG8gY2FsY3VsYXRlIGEgY29uZnVzaW9uIHRhYmxlIGFzIGEgc3VtbWFyeSBzdGF0aXN0aWMuXG5DYWxjdWxhdGluZyBtYXRjaGVzIGZvciBlYWNoIHZhcmlhYmxlLlxuR2V0dGluZyBjb3VudHMgZm9yIHBhcmFtZXRlciBlc3RpbWF0aW9uLlxuUnVubmluZyB0aGUgRU0gYWxnb3JpdGhtLlxuR2V0dGluZyB0aGUgaW5kaWNlcyBvZiBlc3RpbWF0ZWQgbWF0Y2hlcy5cbkNhbGN1bGF0aW5nIHRoZSBwb3N0ZXJpb3IgZm9yIGVhY2ggcGFpciBvZiBtYXRjaGVkIG9ic2VydmF0aW9ucy5cbkdldHRpbmcgdGhlIG1hdGNoIHBhdHRlcm5zIGZvciBlYWNoIGVzdGltYXRlZCBtYXRjaC5cbiJ9 -->
+<pre><code>
+==================== 
+fastLink(): Fast Probabilistic Record Linkage
+==================== 
+
+If you set return.all to FALSE, you will not be able to calculate a confusion table as a summary statistic.
+Calculating matches for each variable.
+Getting counts for parameter estimation.
+Running the EM algorithm.
+Getting the indices of estimated matches.
+Calculating the posterior for each pair of matched observations.
+Getting the match patterns for each estimated match.</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZmFzdGxpbmtfbWF0Y2hlcyA8LSB0aWJibGUoXG4gIHJvdyAgICAgPSBmYXN0bGlua19vdXQkbWF0Y2hlcyRpbmRzLmIsXG4gIG1hdGNoZXMgPSBmYXN0bGlua19vdXQkbWF0Y2hlcyRpbmRzLmFcbilcbmBgYCJ9 -->
+<pre class="r"><code>fastlink_matches &lt;- tibble(
+  row     = fastlink_out$matches$inds.b,
+  matches = fastlink_out$matches$inds.a
+)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxucGVyc29uX2tleSA8LSBmYXN0bGlua19tYXRjaGVzICU+JVxuICBcbiAgIyBHZXQgdGhlIG1hdGNoZXMgaW50byB0aGUgZm9ybSB0aGF0IEkgbmVlZCBmb3Igam9pbmluZyBiYWNrIHRvIHRoZSBkYXRhXG4gIGdyb3VwX2J5KHJvdykgJT4lIFxuICBtdXRhdGUobWF0Y2hlcyA9IGxpc3QobWF0Y2hlcykpICU+JSAjIENyZWF0ZSBsaXN0IGNvbHVtblxuICB1bmdyb3VwKCkgJT4lIFxuICBtdXRhdGUobWF0Y2hlcyA9IHB1cnJyOjptYXBfY2hyKG1hdGNoZXMsIH4gcGFzdGUoLiwgY29sbGFwc2UgPSBcIixcIikpKSAlPiUgIyBUdXJuIGxpc3QgaW50byBjaGFyYWN0ZXIgc3RyaW5nXG4gIHNlbGVjdChtYXRjaGVzKSAlPiUgXG4gIGRpc3RpbmN0KCkgJT4lICMgUmVkdWNlIHRvIDEgcm93IHBlciBncm91cCBvZiBtYXRjaGVzXG4gIG11dGF0ZShcbiAgICBwZXJzb25faWQgPSByb3dfbnVtYmVyKCksXG4gICAgcm93ID0gcHVycnI6Om1hcChtYXRjaGVzLCB+IHNjYW4odGV4dCA9IC4sIHdoYXQgPSAwTCwgc2VwID0gXCIsXCIsIHF1aWV0ID0gVFJVRSkpICMgVHVybiBiYWNrIGludG8gbGlzdFxuICApICU+JSBcbiAgdW5uZXN0KCkgJT4lIFxuICBzZWxlY3QocGVyc29uX2lkLCByb3cpICU+JSBcbiAgXG4gICMgSm9pbiB0byB0ZW1wXG4gIHJpZ2h0X2pvaW4oXG4gICAgdGVtcCAlPiUgXG4gICAgICBtdXRhdGUocm93ID0gcm93X251bWJlcigpKSxcbiAgICBieSA9IFwicm93XCJcbiAgKSAlPiUgXG4gIHNlbGVjdChwZXJzb25faWQsIGdyb3VwKVxuYGBgIn0= -->
+<pre class="r"><code>person_key &lt;- fastlink_matches %&gt;%
+  
+  # Get the matches into the form that I need for joining back to the data
+  group_by(row) %&gt;% 
+  mutate(matches = list(matches)) %&gt;% # Create list column
+  ungroup() %&gt;% 
+  mutate(matches = purrr::map_chr(matches, ~ paste(., collapse = &quot;,&quot;))) %&gt;% # Turn list into character string
+  select(matches) %&gt;% 
+  distinct() %&gt;% # Reduce to 1 row per group of matches
+  mutate(
+    person_id = row_number(),
+    row = purrr::map(matches, ~ scan(text = ., what = 0L, sep = &quot;,&quot;, quiet = TRUE)) # Turn back into list
+  ) %&gt;% 
+  unnest() %&gt;% 
+  select(person_id, row) %&gt;% 
+  
+  # Join to temp
+  right_join(
+    temp %&gt;% 
+      mutate(row = row_number()),
+    by = &quot;row&quot;
+  ) %&gt;% 
+  select(person_id, group)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+</div>
+<div id="data-check" class="section level2">
+<h2>Data check</h2>
+<p>Add person id to the full dataset</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZGF0YV9jaGVjayA8LSBtZWRzdGFyX2Fwc19tZXJnZWQgJT4lIFxuICBsZWZ0X2pvaW4ocGVyc29uX2tleSwgYnkgPSBcImdyb3VwXCIpXG5gYGAifQ== -->
+<pre class="r"><code>data_check &lt;- medstar_aps_merged %&gt;% 
+  left_join(person_key, by = &quot;group&quot;)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p>Manually inspect rows with different values that were considered the same person. Look instances when this appears to have been done inappropriately (results hidden to protect privacy).</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjpbImRhdGFfY2hlY2sgJT4lICIsIiAgZ3JvdXBfYnkocGVyc29uX2lkLCBmaXJzdF9uYW1lLCBsYXN0X25hbWUsIGJpcnRoX3llYXIsIGJpcnRoX21udGgsIGJpcnRoX2RheSwgYWRkcmVzc19zdHJlZXQpICU+JSAiLCIgIGZpbHRlcihyb3dfbnVtYmVyKCkgPT0gMSkgJT4lICIsIiAgYXJyYW5nZShwZXJzb25faWQpICU+JSAiLCIgIHNlbGVjdChwZXJzb25faWQsIGV2ZXJ5dGhpbmcoKSkgJT4lICIsIiAgZ3JvdXBfYnkocGVyc29uX2lkKSAlPiUgIiwiICBmaWx0ZXIobWF4KHJvd19udW1iZXIoKSkgPiAxKSJdfQ== -->
+<pre class="r"><code>data_check %&gt;% 
+  group_by(person_id, first_name, last_name, birth_year, birth_mnth, birth_day, address_street) %&gt;% 
+  filter(row_number() == 1) %&gt;% 
+  arrange(person_id) %&gt;% 
+  select(person_id, everything()) %&gt;% 
+  group_by(person_id) %&gt;% 
+  filter(max(row_number()) &gt; 1)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p>The process appears to have worked as expected.</p>
+</div>
+<div id="add-person-id-to-the-full-dataset" class="section level2">
+<h2>Add person id to the full dataset</h2>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubWVkc3Rhcl9hcHNfbWVyZ2VkIDwtIG1lZHN0YXJfYXBzX21lcmdlZCAlPiUgXG4gIGxlZnRfam9pbihwZXJzb25fa2V5LCBieSA9IFwiZ3JvdXBcIikgJT4lIFxuICBzZWxlY3QoLWdyb3VwKVxuYGBgIn0= -->
+<pre class="r"><code>medstar_aps_merged &lt;- medstar_aps_merged %&gt;% 
+  left_join(person_key, by = &quot;group&quot;) %&gt;% 
+  select(-group)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYWJvdXRfZGF0YShtZWRzdGFyX2Fwc19tZXJnZWQpICMgNjYsMjAwIG9ic2VydmF0aW9ucyBhbmQgNTggdmFyaWFibGVzXG5gYGAifQ== -->
+<pre class="r"><code>about_data(medstar_aps_merged) # 66,200 observations and 58 variables</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiWzFdIFwiNjYsMjAwIG9ic2VydmF0aW9ucyBhbmQgNTggdmFyaWFibGVzXCJcbiJ9 -->
+<pre><code>[1] &quot;66,200 observations and 58 variables&quot;</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+</div>
+<div id="clean-up" class="section level2">
+<h2>Clean up</h2>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxucm0oZGF0YV9jaGVjaywgZmFzdGxpbmtfbWF0Y2hlcywgZmFzdGxpbmtfb3V0LCBwZXJzb25fa2V5LCB0ZW1wKVxuYGBgIn0= -->
+<pre class="r"><code>rm(data_check, fastlink_matches, fastlink_out, person_key, temp)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p><a href="#top">top</a></p>
+</div>
+</div>
+<div id="deidentify-1" class="section level1">
+<h1>Deidentify the response numbers from the MedStar legal compliance department</h1>
+<p>This has to be done before deidentifying the incient call number.</p>
+<p>Check to see if the expectd response numbers from the MedStar compliance data exist in the merged data.</p>
+<p>In data_medstar_detect_screenings_01_import.Rmd there were 8 response id’s from the compliance data that had a match in the DETECT screening tool data.</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYWJvdXRfZGF0YShyZXNwb25zZV9pZHMpICMgMTQgb2JzZXJ2YXRpb25zIGFuZCAxIHZhcmlhYmxlc1xuYGBgIn0= -->
+<pre class="r"><code>about_data(response_ids) # 14 observations and 1 variables</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiWzFdIFwiMTQgb2JzZXJ2YXRpb25zIGFuZCAxIHZhcmlhYmxlc1wiXG4ifQ== -->
+<pre><code>[1] &quot;14 observations and 1 variables&quot;</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p>anti_join returns all rows in MedStar’s legal compliance data that do not have a match in the MedStar DETECT screening items data that was matched to APS cases (results hidden to protect participant privacy).</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjpbInJlc3BvbnNlX2lkcyAlPiUgIiwiICBhbnRpX2pvaW4obWVkc3Rhcl9hcHNfbWVyZ2VkICU+JSAiLCIgICAgICAgICAgICAgIGdyb3VwX2J5KGluY2lkZW50X3Bjcl9udW1iZXIpICU+JSAiLCIgICAgICAgICAgICAgIGZpbHRlcihyb3dfbnVtYmVyKCkgPT0gMSksICIsIiAgICAgICAgICAgIGJ5ID0gYyhcInJlc3BvbnNlX251bVwiID0gXCJpbmNpZGVudF9jYWxsX251bWJlclwiKSkgJT4lICAiLCIgIHVuaXF1ZSgpICMgNiBpbmNpZGVudCBwY3IgbnVtYmVycyJdfQ== -->
+<pre class="r"><code>response_ids %&gt;% 
+  anti_join(medstar_aps_merged %&gt;% 
+              group_by(incident_pcr_number) %&gt;% 
+              filter(row_number() == 1), 
+            by = c(&quot;response_num&quot; = &quot;incident_call_number&quot;)) %&gt;%  
+  unique() # 6 incident pcr numbers</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p>There are 6 responses id’s in the MedStar compliance data that don’t appear in the MedStar DETECT screening items data (results hidden to protect participant privacy).</p>
+<p>I have an email from MedStar from 2016-10-10 outlining the discrepancy. One response id had all nulls for the DETECT screening items (…147). One response id could not be found in the query. The rest were ineligible for the DETECT screening tool because of age.</p>
+<p>At this point, there should be 8 response id’s from the compliance data that have a match in the merged MedStar/APS data (results hidden to protect participant privacy).</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjpbInJlc3BvbnNlX2lkcyAlPiUgIiwiICBzZW1pX2pvaW4obWVkc3Rhcl9hcHNfbWVyZ2VkICU+JSAiLCIgICAgICAgICAgICAgIGdyb3VwX2J5KGluY2lkZW50X3Bjcl9udW1iZXIpICU+JSAiLCIgICAgICAgICAgICAgIGZpbHRlcihyb3dfbnVtYmVyKCkgPT0gMSksICIsIiAgICAgICAgICAgIGJ5ID0gYyhcInJlc3BvbnNlX251bVwiID0gXCJpbmNpZGVudF9jYWxsX251bWJlclwiKSkgJT4lICIsIiAgdW5pcXVlKCkgIyA4IGluY2lkZW50IHBjciBudW1iZXJzIl19 -->
+<pre class="r"><code>response_ids %&gt;% 
+  semi_join(medstar_aps_merged %&gt;% 
+              group_by(incident_pcr_number) %&gt;% 
+              filter(row_number() == 1), 
+            by = c(&quot;response_num&quot; = &quot;incident_call_number&quot;)) %&gt;% 
+  unique() # 8 incident pcr numbers</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p>Now we need a way to track these cases going forward without using a number that has meaning in MedStar’s database.</p>
+<p>We will just add a new variable to the merged data that indicates it was match with the compliance data.</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuaW5fY29tcGxpYW5jZV9kYXRhIDwtIHJlc3BvbnNlX2lkcyAlPiUgXG4gIHNlbWlfam9pbihtZWRzdGFyX2Fwc19tZXJnZWQgJT4lIFxuICAgICAgICAgICAgICBncm91cF9ieShpbmNpZGVudF9wY3JfbnVtYmVyKSAlPiUgXG4gICAgICAgICAgICAgIGZpbHRlcihyb3dfbnVtYmVyKCkgPT0gMSksIFxuICAgICAgICAgICAgYnkgPSBjKFwicmVzcG9uc2VfbnVtXCIgPSBcImluY2lkZW50X2NhbGxfbnVtYmVyXCIpKSAlPiUgXG4gIHVuaXF1ZSgpICU+JSBcbiAgbXV0YXRlKGluX2NvbXBsaWFuY2VfZGF0YSA9IDFMKVxuYGBgIn0= -->
+<pre class="r"><code>in_compliance_data &lt;- response_ids %&gt;% 
+  semi_join(medstar_aps_merged %&gt;% 
+              group_by(incident_pcr_number) %&gt;% 
+              filter(row_number() == 1), 
+            by = c(&quot;response_num&quot; = &quot;incident_call_number&quot;)) %&gt;% 
+  unique() %&gt;% 
+  mutate(in_compliance_data = 1L)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubWVkc3Rhcl9hcHNfbWVyZ2VkIDwtIG1lZHN0YXJfYXBzX21lcmdlZCAlPiUgXG4gIGxlZnRfam9pbihpbl9jb21wbGlhbmNlX2RhdGEsIGJ5ID0gYyhcImluY2lkZW50X2NhbGxfbnVtYmVyXCIgPSBcInJlc3BvbnNlX251bVwiKSkgJT4lIFxuICBtdXRhdGUoaW5fY29tcGxpYW5jZV9kYXRhID0gaWZfZWxzZShpcy5uYShpbl9jb21wbGlhbmNlX2RhdGEpLCAwTCwgaW5fY29tcGxpYW5jZV9kYXRhKSlcbmBgYCJ9 -->
+<pre class="r"><code>medstar_aps_merged &lt;- medstar_aps_merged %&gt;% 
+  left_join(in_compliance_data, by = c(&quot;incident_call_number&quot; = &quot;response_num&quot;)) %&gt;% 
+  mutate(in_compliance_data = if_else(is.na(in_compliance_data), 0L, in_compliance_data))</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYWJvdXRfZGF0YShtZWRzdGFyX2Fwc19tZXJnZWQpICMgOSBvYnNlcnZhdGlvbnMgYW5kIDEgdmFyaWFibGVzXG5gYGAifQ== -->
+<pre class="r"><code>about_data(medstar_aps_merged) # 9 observations and 1 variables</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiWzFdIFwiNjYsMjAwIG9ic2VydmF0aW9ucyBhbmQgNTkgdmFyaWFibGVzXCJcbiJ9 -->
+<pre><code>[1] &quot;66,200 observations and 59 variables&quot;</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<div id="data-check-1" class="section level2">
+<h2>Data check</h2>
+<p>At this point, there should be 8 response id’s from the compliance data that have a match in the merged MedStar/APS data (results hidden to protect participant privacy).</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjpbIm1lZHN0YXJfYXBzX21lcmdlZCAlPiUgIiwiICBmaWx0ZXIoaW5fY29tcGxpYW5jZV9kYXRhID09IDEpICU+JSAiLCIgIGdyb3VwX2J5KGluY2lkZW50X2NhbGxfbnVtYmVyKSAlPiUgIiwiICBmaWx0ZXIocm93X251bWJlcigpID09IDEpICMgOCByb3dzIl19 -->
+<pre class="r"><code>medstar_aps_merged %&gt;% 
+  filter(in_compliance_data == 1) %&gt;% 
+  group_by(incident_call_number) %&gt;% 
+  filter(row_number() == 1) # 8 rows</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+</div>
+<div id="clean-up-1" class="section level2">
+<h2>Clean up</h2>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxucm0oaW5fY29tcGxpYW5jZV9kYXRhLCByZXNwb25zZV9pZHMpXG5gYGAifQ== -->
+<pre class="r"><code>rm(in_compliance_data, response_ids)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p><a href="#top">top</a></p>
+</div>
+</div>
+<div id="deidentify-2" class="section level1">
+<h1>Deidentify the merged dataset</h1>
+<p>We need to create deidentified datasets for <a href="https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html">NACJD</a>.</p>
+<div id="save-current-order-of-variables" class="section level2">
+<h2>Save current order of variables</h2>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuY3VycmVudF9vcmRlciA8LSBuYW1lcyhtZWRzdGFyX2Fwc19tZXJnZWQpXG5gYGAifQ== -->
+<pre class="r"><code>current_order &lt;- names(medstar_aps_merged)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+</div>
+<div id="incident-call-numbers" class="section level2">
+<h2>Incident call numbers</h2>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubWVkc3Rhcl9hcHNfbWVyZ2VkIDwtIG1lZHN0YXJfYXBzX21lcmdlZCAlPiUgXG4gIHNlbGVjdChpbmNpZGVudF9jYWxsX251bWJlcikgJT4lIFxuICB1bmlxdWUoKSAlPiUgXG4gIG11dGF0ZShuZXcgPSByb3dfbnVtYmVyKCkpICU+JSBcbiAgcmlnaHRfam9pbihtZWRzdGFyX2Fwc19tZXJnZWQsIGJ5ID0gXCJpbmNpZGVudF9jYWxsX251bWJlclwiKSAlPiUgXG4gICMgUHJldmVudCBhc3NpZ25pbmcgbnVtYmVyIHRvIE5BXG4gIG11dGF0ZShuZXcgPSBpZl9lbHNlKGlzLm5hKGluY2lkZW50X2NhbGxfbnVtYmVyKSwgTkFfaW50ZWdlcl8sIG5ldykpICU+JSBcbiAgbXV0YXRlKGluY2lkZW50X2NhbGxfbnVtYmVyID0gbmV3KSAlPiUgXG4gIHNlbGVjdCgtbmV3KVxuYGBgIn0= -->
+<pre class="r"><code>medstar_aps_merged &lt;- medstar_aps_merged %&gt;% 
+  select(incident_call_number) %&gt;% 
+  unique() %&gt;% 
+  mutate(new = row_number()) %&gt;% 
+  right_join(medstar_aps_merged, by = &quot;incident_call_number&quot;) %&gt;% 
+  # Prevent assigning number to NA
+  mutate(new = if_else(is.na(incident_call_number), NA_integer_, new)) %&gt;% 
+  mutate(incident_call_number = new) %&gt;% 
+  select(-new)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+</div>
+<div id="incident-pcr-numbers" class="section level2">
+<h2>Incident pcr numbers</h2>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubWVkc3Rhcl9hcHNfbWVyZ2VkIDwtIG1lZHN0YXJfYXBzX21lcmdlZCAlPiUgXG4gIHNlbGVjdChpbmNpZGVudF9wY3JfbnVtYmVyKSAlPiUgXG4gIHVuaXF1ZSgpICU+JSBcbiAgbXV0YXRlKG5ldyA9IHJvd19udW1iZXIoKSkgJT4lIFxuICByaWdodF9qb2luKG1lZHN0YXJfYXBzX21lcmdlZCwgYnkgPSBcImluY2lkZW50X3Bjcl9udW1iZXJcIikgJT4lIFxuICAjIFByZXZlbnQgYXNzaWduaW5nIG51bWJlciB0byBOQVxuICBtdXRhdGUobmV3ID0gaWZfZWxzZShpcy5uYShpbmNpZGVudF9wY3JfbnVtYmVyKSwgTkFfaW50ZWdlcl8sIG5ldykpICU+JVxuICBtdXRhdGUoaW5jaWRlbnRfcGNyX251bWJlciA9IG5ldykgJT4lIFxuICBzZWxlY3QoLW5ldylcbmBgYCJ9 -->
+<pre class="r"><code>medstar_aps_merged &lt;- medstar_aps_merged %&gt;% 
+  select(incident_pcr_number) %&gt;% 
+  unique() %&gt;% 
+  mutate(new = row_number()) %&gt;% 
+  right_join(medstar_aps_merged, by = &quot;incident_pcr_number&quot;) %&gt;% 
+  # Prevent assigning number to NA
+  mutate(new = if_else(is.na(incident_pcr_number), NA_integer_, new)) %&gt;%
+  mutate(incident_pcr_number = new) %&gt;% 
+  select(-new)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+</div>
+<div id="case-numbers" class="section level2">
+<h2>Case numbers</h2>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubWVkc3Rhcl9hcHNfbWVyZ2VkIDwtIG1lZHN0YXJfYXBzX21lcmdlZCAlPiUgXG4gIHNlbGVjdChjYXNlX251bSkgJT4lIFxuICB1bmlxdWUoKSAlPiUgXG4gIG11dGF0ZShuZXcgPSByb3dfbnVtYmVyKCkpICU+JSBcbiAgcmlnaHRfam9pbihtZWRzdGFyX2Fwc19tZXJnZWQsIGJ5ID0gXCJjYXNlX251bVwiKSAlPiUgXG4gICMgUHJldmVudCBhc3NpZ25pbmcgbnVtYmVyIHRvIE5BXG4gIG11dGF0ZShuZXcgPSBpZl9lbHNlKGlzLm5hKGNhc2VfbnVtKSwgTkFfaW50ZWdlcl8sIG5ldykpICU+JVxuICBtdXRhdGUoY2FzZV9udW0gPSBuZXcpICU+JSBcbiAgc2VsZWN0KC1uZXcpICU+JSBcbiAgIyBUbyBmb3JjZSBjYXNlIG51bWJlcnMgdG8gc3RhcnQgYXQgMVxuICBtdXRhdGUoY2FzZV9udW0gPSBjYXNlX251bSAtIDEpXG5gYGAifQ== -->
+<pre class="r"><code>medstar_aps_merged &lt;- medstar_aps_merged %&gt;% 
+  select(case_num) %&gt;% 
+  unique() %&gt;% 
+  mutate(new = row_number()) %&gt;% 
+  right_join(medstar_aps_merged, by = &quot;case_num&quot;) %&gt;% 
+  # Prevent assigning number to NA
+  mutate(new = if_else(is.na(case_num), NA_integer_, new)) %&gt;%
+  mutate(case_num = new) %&gt;% 
+  select(-new) %&gt;% 
+  # To force case numbers to start at 1
+  mutate(case_num = case_num - 1)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+</div>
+<div id="crew-member-id" class="section level2">
+<h2>Crew member id</h2>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubWVkc3Rhcl9hcHNfbWVyZ2VkIDwtIG1lZHN0YXJfYXBzX21lcmdlZCAlPiVcbiAgc2VsZWN0KGNyZXdfbWVtYmVyX2lkKSAlPiUgXG4gIHVuaXF1ZSgpICU+JSBcbiAgbXV0YXRlKG5ldyA9IHJvd19udW1iZXIoKSkgJT4lIFxuICByaWdodF9qb2luKG1lZHN0YXJfYXBzX21lcmdlZCwgYnkgPSBcImNyZXdfbWVtYmVyX2lkXCIpICU+JSBcbiAgIyBQcmV2ZW50IGFzc2lnbmluZyBudW1iZXIgdG8gTkFcbiAgbXV0YXRlKG5ldyA9IGlmX2Vsc2UoaXMubmEoY3Jld19tZW1iZXJfaWQpLCBOQV9pbnRlZ2VyXywgbmV3KSkgJT4lXG4gIG11dGF0ZShjcmV3X21lbWJlcl9pZCA9IG5ldykgJT4lIFxuICBzZWxlY3QoLW5ldylcbmBgYCJ9 -->
+<pre class="r"><code>medstar_aps_merged &lt;- medstar_aps_merged %&gt;%
+  select(crew_member_id) %&gt;% 
+  unique() %&gt;% 
+  mutate(new = row_number()) %&gt;% 
+  right_join(medstar_aps_merged, by = &quot;crew_member_id&quot;) %&gt;% 
+  # Prevent assigning number to NA
+  mutate(new = if_else(is.na(crew_member_id), NA_integer_, new)) %&gt;%
+  mutate(crew_member_id = new) %&gt;% 
+  select(-new)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+</div>
+<div id="perp-id" class="section level2">
+<h2>Perp id</h2>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubWVkc3Rhcl9hcHNfbWVyZ2VkIDwtIG1lZHN0YXJfYXBzX21lcmdlZCAlPiVcbiAgc2VsZWN0KHBlcnBfaWQpICU+JSBcbiAgdW5pcXVlKCkgJT4lIFxuICBtdXRhdGUobmV3ID0gcm93X251bWJlcigpKSAlPiUgXG4gIHJpZ2h0X2pvaW4obWVkc3Rhcl9hcHNfbWVyZ2VkLCBieSA9IFwicGVycF9pZFwiKSAlPiUgXG4gICMgUHJldmVudCBhc3NpZ25pbmcgbnVtYmVyIHRvIE5BXG4gIG11dGF0ZShuZXcgPSBpZl9lbHNlKGlzLm5hKHBlcnBfaWQpLCBOQV9pbnRlZ2VyXywgbmV3KSkgJT4lXG4gIG11dGF0ZShwZXJwX2lkID0gbmV3KSAlPiUgXG4gIHNlbGVjdCgtbmV3KSAlPiUgXG4gICMgVG8gZm9yY2UgcGVycCBpZHMgdG8gc3RhcnQgYXQgMVxuICBtdXRhdGUocGVycF9pZCA9IHBlcnBfaWQgLSAxKVxuYGBgIn0= -->
+<pre class="r"><code>medstar_aps_merged &lt;- medstar_aps_merged %&gt;%
+  select(perp_id) %&gt;% 
+  unique() %&gt;% 
+  mutate(new = row_number()) %&gt;% 
+  right_join(medstar_aps_merged, by = &quot;perp_id&quot;) %&gt;% 
+  # Prevent assigning number to NA
+  mutate(new = if_else(is.na(perp_id), NA_integer_, new)) %&gt;%
+  mutate(perp_id = new) %&gt;% 
+  select(-new) %&gt;% 
+  # To force perp ids to start at 1
+  mutate(perp_id = perp_id - 1)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+</div>
+<div id="remove-the-day-from-all-remaining-date-variables" class="section level2">
+<h2>Remove the day from all remaining date variables</h2>
+<p>As part of the process of protecting participant anonymity, we will remove the day from all dates.</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubWVkc3Rhcl9hcHNfbWVyZ2VkIDwtIG1lZHN0YXJfYXBzX21lcmdlZCAlPiUgXG4gIG11dGF0ZShcbiAgICBkYXRlX2VudGVyZWQgPSBmb3JtYXQoZGF0ZV9lbnRlcmVkLCBcIiVZLSVtXCIpLFxuICAgIGludGFrZV9zdGFydCA9IGZvcm1hdChpbnRha2Vfc3RhcnQsIFwiJVktJW1cIilcbiAgKVxuYGBgIn0= -->
+<pre class="r"><code>medstar_aps_merged &lt;- medstar_aps_merged %&gt;% 
+  mutate(
+    date_entered = format(date_entered, &quot;%Y-%m&quot;),
+    intake_start = format(intake_start, &quot;%Y-%m&quot;)
+  )</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+</div>
+<div id="remove-remaining-identifiers" class="section level2">
+<h2>Remove remaining identifiers</h2>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubWVkc3Rhcl9hcHNfbWVyZ2VkIDwtIG1lZHN0YXJfYXBzX21lcmdlZCAlPiUgXG4gIHNlbGVjdCgtZmlyc3RfbmFtZSwgLWxhc3RfbmFtZSwgLWJpcnRoX3llYXIsIC1iaXJ0aF9tbnRoLCAtYmlydGhfZGF5LCAtYWRkcmVzc19udW0sIFxuICAgICAgICAgLWFkZHJlc3Nfc3RyZWV0LCAtY2l0eSwgLXppcClcbmBgYCJ9 -->
+<pre class="r"><code>medstar_aps_merged &lt;- medstar_aps_merged %&gt;% 
+  select(-first_name, -last_name, -birth_year, -birth_mnth, -birth_day, -address_num, 
+         -address_street, -city, -zip)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYWJvdXRfZGF0YShtZWRzdGFyX2Fwc19tZXJnZWQpICMgNjYsMjAwIG9ic2VydmF0aW9ucyBhbmQgNTAgdmFyaWFibGVzXG5gYGAifQ== -->
+<pre class="r"><code>about_data(medstar_aps_merged) # 66,200 observations and 50 variables</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiWzFdIFwiNjYsMjAwIG9ic2VydmF0aW9ucyBhbmQgNTAgdmFyaWFibGVzXCJcbiJ9 -->
+<pre><code>[1] &quot;66,200 observations and 50 variables&quot;</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+</div>
+<div id="reorder-variables" class="section level2">
+<h2>Reorder variables</h2>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuY3VycmVudF9vcmRlciA8LSBzZXRkaWZmKFxuICBjdXJyZW50X29yZGVyLCBcbiAgYyhcImZpcnN0X25hbWVcIiwgXCJsYXN0X25hbWVcIiwgXCJiaXJ0aF95ZWFyXCIsIFwiYmlydGhfbW50aFwiLCBcImJpcnRoX2RheVwiLFxuICAgIFwiYWRkcmVzc19udW1cIiwgXCJhZGRyZXNzX3N0cmVldFwiLCBcImNpdHlcIiwgXCJ6aXBcIilcbilcbmBgYCJ9 -->
+<pre class="r"><code>current_order &lt;- setdiff(
+  current_order, 
+  c(&quot;first_name&quot;, &quot;last_name&quot;, &quot;birth_year&quot;, &quot;birth_mnth&quot;, &quot;birth_day&quot;,
+    &quot;address_num&quot;, &quot;address_street&quot;, &quot;city&quot;, &quot;zip&quot;)
+)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubWVkc3Rhcl9hcHNfbWVyZ2VkIDwtIG1lZHN0YXJfYXBzX21lcmdlZCAlPiVcbiAgc2VsZWN0KGN1cnJlbnRfb3JkZXIpXG5gYGAifQ== -->
+<pre class="r"><code>medstar_aps_merged &lt;- medstar_aps_merged %&gt;%
+  select(current_order)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYWJvdXRfZGF0YShtZWRzdGFyX2Fwc19tZXJnZWQpICMgNjYsMjAwIG9ic2VydmF0aW9ucyBhbmQgNTAgdmFyaWFibGVzXG5gYGAifQ== -->
+<pre class="r"><code>about_data(medstar_aps_merged) # 66,200 observations and 50 variables</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiWzFdIFwiNjYsMjAwIG9ic2VydmF0aW9ucyBhbmQgNTAgdmFyaWFibGVzXCJcbiJ9 -->
+<pre><code>[1] &quot;66,200 observations and 50 variables&quot;</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+</div>
+<div id="clean-up-2" class="section level2">
+<h2>Clean up</h2>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxucm0oY3VycmVudF9vcmRlcilcbmBgYCJ9 -->
+<pre class="r"><code>rm(current_order)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p><a href="#top">top</a></p>
+</div>
+</div>
+<div id="save" class="section level1">
+<h1>Save deidentified version of merged dataset</h1>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZmVhdGhlcjo6d3JpdGVfZmVhdGhlcihcbiAgbWVkc3Rhcl9hcHNfbWVyZ2VkLCBcbiAgXCIuLi9kYXRhL21lZHN0YXJfYXBzX21lcmdlZC5mZWF0aGVyXCJcbilcbmBgYCJ9 -->
+<pre class="r"><code>feather::write_feather(
+  medstar_aps_merged, 
+  &quot;../data/medstar_aps_merged.feather&quot;
+)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxucmVhZHI6OndyaXRlX2NzdihcbiAgbWVkc3Rhcl9hcHNfbWVyZ2VkLCBcbiAgXCIuLi9kYXRhL21lZHN0YXJfYXBzX21lcmdlZC5jc3ZcIlxuKVxuYGBgIn0= -->
+<pre class="r"><code>readr::write_csv(
+  medstar_aps_merged, 
+  &quot;../data/medstar_aps_merged.csv&quot;
+)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<p><a href="#top">top</a></p>
+</div>
+<div id="counts" class="section level1">
+<h1>Count rows, unique responses, and unique people</h1>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubWVkc3Rhcl9hcHNfbWVyZ2VkICU+JSBcbiAgc3VtbWFyaXNlKFxuICAgIGBUb3RhbCBSb3dzYCA9IG4oKSxcbiAgICBgVW5pcXVlIEluY2lkZW50c2AgPSB1bmlxdWUoaW5jaWRlbnRfY2FsbF9udW1iZXIpICU+JSBsZW5ndGgoKSxcbiAgICBgVW5pcXVlIFBDUmAgPSB1bmlxdWUoaW5jaWRlbnRfcGNyX251bWJlcikgJT4lIGxlbmd0aCgpLFxuICAgIGBVbmlxdWUgQ2FzZSBOdW1iZXJzYCA9IHVuaXF1ZShjYXNlX251bSkgJT4lIGxlbmd0aCgpLFxuICAgIGBVbmlxdWUgUGVvcGxlYCA9IHVuaXF1ZShwZXJzb25faWQpICU+JSBsZW5ndGgoKVxuICApICU+JSBcbiAgbXV0YXRlX2FsbChmb3JtYXQsIGJpZy5tYXJrID0gXCIsXCIpXG5gYGAifQ== -->
+<pre class="r"><code>medstar_aps_merged %&gt;% 
+  summarise(
+    `Total Rows` = n(),
+    `Unique Incidents` = unique(incident_call_number) %&gt;% length(),
+    `Unique PCR` = unique(incident_pcr_number) %&gt;% length(),
+    `Unique Case Numbers` = unique(case_num) %&gt;% length(),
+    `Unique People` = unique(person_id) %&gt;% length()
+  ) %&gt;% 
+  mutate_all(format, big.mark = &quot;,&quot;)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-frame-begin eyJtZXRhZGF0YSI6eyJjbGFzc2VzIjpbInRibF9kZiIsInRibCIsImRhdGEuZnJhbWUiXSwibmNvbCI6NSwibnJvdyI6MX0sInJkZiI6Ikg0c0lBQUFBQUFBQUEyMlIwVTZETUJTR0M2eVNrYUJMOWdJOHdFWTJZdGp1NTQwM3hoQk5kdHRCVldKcHNVRG1wVSsrZVJnOUJwczFvVDM5K2hmKzg1TTk3Sk5nSHhCQ1hPSlJoN2dlbEJNWEpvZE15TFJmdndueDVsQlFlR2FqZzVzMFhTU3JsVVhwZXBIY3A5Zmcxb0pldXIxeWViTk9MUU0wRjZ4cExHVlFzSmJGYjVwVjNKWkxZQ2luS0g5UkxSTlJwbzZOSWJOWFdYNTFQSHFVZVZsdzJTSVBESC9lWlliTURkbXhoa2RQWFhYZ0dzVWhpcm1xaFcxa3F0VXhSak5obi9BUFRHY1lzSndzc2EvcXRsUVNwRzZmdFQ5SS9yWHM2TjdlQlF4amZIalh5ZjVUeFRMLzZPVG5jbU5KUTFNN281b09Gcnl6ZVpXUFZuSlZWWkFJL21ZdTMwdkpNVjJ1dGRLNEVlekFoZG5jUXJ1WGJ1TmFsMyszQTZCTjNQYnBJOG1WUURJMGVmb0Z3Q2grUjRVQ0FBQT0ifQ== -->
+<div data-pagedtable="false">
+<script data-pagedtable-source type="application/json">
+{"columns":[{"label":["Total Rows"],"name":[1],"type":["chr"],"align":["left"]},{"label":["Unique Incidents"],"name":[2],"type":["chr"],"align":["left"]},{"label":["Unique PCR"],"name":[3],"type":["chr"],"align":["left"]},{"label":["Unique Case Numbers"],"name":[4],"type":["chr"],"align":["left"]},{"label":["Unique People"],"name":[5],"type":["chr"],"align":["left"]}],"data":[{"1":"66,200","2":"1,246","3":"1,248","4":"680","5":"1,716"}],"options":{"columns":{"min":{},"max":[10],"total":[5]},"rows":{"min":[10],"max":[10],"total":[1]},"pages":{}}}
+  </script>
+</div>
+<!-- rnb-frame-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <p><a href="#top">top</a></p>
@@ -234,10 +788,53 @@ library(bfuncs)</code></pre>
 <hr />
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
+<!-- rnb-output-begin eyJkYXRhIjoiUiB2ZXJzaW9uIDMuNS4xICgyMDE4LTA3LTAyKVxuUGxhdGZvcm06IHg4Nl82NC1hcHBsZS1kYXJ3aW4xNS42LjAgKDY0LWJpdClcblJ1bm5pbmcgdW5kZXI6IG1hY09TICAxMC4xNFxuXG5NYXRyaXggcHJvZHVjdHM6IGRlZmF1bHRcbkJMQVM6IC9TeXN0ZW0vTGlicmFyeS9GcmFtZXdvcmtzL0FjY2VsZXJhdGUuZnJhbWV3b3JrL1ZlcnNpb25zL0EvRnJhbWV3b3Jrcy92ZWNMaWIuZnJhbWV3b3JrL1ZlcnNpb25zL0EvbGliQkxBUy5keWxpYlxuTEFQQUNLOiAvTGlicmFyeS9GcmFtZXdvcmtzL1IuZnJhbWV3b3JrL1ZlcnNpb25zLzMuNS9SZXNvdXJjZXMvbGliL2xpYlJsYXBhY2suZHlsaWJcblxubG9jYWxlOlxuWzFdIGVuX1VTLlVURi04L2VuX1VTLlVURi04L2VuX1VTLlVURi04L0MvZW5fVVMuVVRGLTgvZW5fVVMuVVRGLThcblxuYXR0YWNoZWQgYmFzZSBwYWNrYWdlczpcblsxXSBzdGF0cyAgICAgZ3JhcGhpY3MgIGdyRGV2aWNlcyB1dGlscyAgICAgZGF0YXNldHMgIG1ldGhvZHMgICBiYXNlICAgICBcblxub3RoZXIgYXR0YWNoZWQgcGFja2FnZXM6XG4gWzFdIGJpbmRyY3BwXzAuMi4yICBmYXN0TGlua18wLjQuMCAgYmZ1bmNzXzAuMi4xICAgIGZvcmNhdHNfMC4zLjAgICBzdHJpbmdyXzEuMy4xICAgZHBseXJfMC43LjYgICAgXG4gWzddIHB1cnJyXzAuMi41ICAgICByZWFkcl8xLjEuMSAgICAgdGlkeXJfMC44LjEgICAgIHRpYmJsZV8xLjQuMiAgICBnZ3Bsb3QyXzMuMC4wICAgdGlkeXZlcnNlXzEuMi4xXG5cbmxvYWRlZCB2aWEgYSBuYW1lc3BhY2UgKGFuZCBub3QgYXR0YWNoZWQpOlxuIFsxXSBubG1lXzMuMS0xMzcgICAgICAgICBsdWJyaWRhdGVfMS43LjQgICAgICBiaXQ2NF8wLjktNyAgICAgICAgICBkb1BhcmFsbGVsXzEuMC4xNCAgIFxuIFs1XSBodHRyXzEuMy4xICAgICAgICAgICBycHJvanJvb3RfMS4zLTIgICAgICBldmRfMi4zLTMgICAgICAgICAgICB0b29sc18zLjUuMSAgICAgICAgIFxuIFs5XSBiYWNrcG9ydHNfMS4xLjIgICAgICBSNl8yLjIuMiAgICAgICAgICAgICBycGFydF80LjEtMTMgICAgICAgICBLZXJuU21vb3RoXzIuMjMtMTUgIFxuWzEzXSBEQklfMS4wLjAgICAgICAgICAgICBsYXp5ZXZhbF8wLjIuMSAgICAgICBjb2xvcnNwYWNlXzEuMy0yICAgICBhZGU0XzEuNy0xMyAgICAgICAgIFxuWzE3XSBubmV0XzcuMy0xMiAgICAgICAgICB3aXRocl8yLjEuMiAgICAgICAgICB0aWR5c2VsZWN0XzAuMi40ICAgICBiaXRfMS4xLTE0ICAgICAgICAgIFxuWzIxXSBjb21waWxlcl8zLjUuMSAgICAgICBjbGlfMS4wLjAgICAgICAgICAgICBydmVzdF8wLjMuMiAgICAgICAgICBhZGFnaW9fMC43LjEgICAgICAgIFxuWzI1XSB4bWwyXzEuMi4wICAgICAgICAgICBzY2FsZXNfMS4wLjAgICAgICAgICBkaWdlc3RfMC42LjE2ICAgICAgICBybWFya2Rvd25fMS4xMCAgICAgIFxuWzI5XSBzdHJpbmdkaXN0XzAuOS41LjEgICBiYXNlNjRlbmNfMC4xLTMgICAgICBwa2djb25maWdfMi4wLjIgICAgICBodG1sdG9vbHNfMC4zLjYgICAgIFxuWzMzXSBSZWNvcmRMaW5rYWdlXzAuNC0xMCBwbG90cml4XzMuNy00ICAgICAgICBybGFuZ18wLjIuMiAgICAgICAgICByZWFkeGxfMS4xLjAgICAgICAgIFxuWzM3XSByc3R1ZGlvYXBpXzAuNyAgICAgICBSU1FMaXRlXzIuMS4xICAgICAgICBiaW5kcl8wLjEuMSAgICAgICAgICBqc29ubGl0ZV8xLjUgICAgICAgIFxuWzQxXSBndG9vbHNfMy44LjEgICAgICAgICBtYWdyaXR0cl8xLjUgICAgICAgICBmZWF0aGVyXzAuMy4xICAgICAgICBhZGFfMi4wLTUgICAgICAgICAgIFxuWzQ1XSBNYXRyaXhfMS4yLTE0ICAgICAgICBSY3BwXzAuMTIuMTggICAgICAgICBtdW5zZWxsXzAuNS4wICAgICAgICBzY2F0dGVycGxvdDNkXzAuMy00MVxuWzQ5XSBzdHJpbmdpXzEuMi40ICAgICAgICB5YW1sXzIuMi4wICAgICAgICAgICBNQVNTXzcuMy01MCAgICAgICAgICBwbHlyXzEuOC40ICAgICAgICAgIFxuWzUzXSBncmlkXzMuNS4xICAgICAgICAgICBibG9iXzEuMS4xICAgICAgICAgICBwYXJhbGxlbF8zLjUuMSAgICAgICBnZ3JlcGVsXzAuOC4wICAgICAgIFxuWzU3XSBjcmF5b25fMS4zLjQgICAgICAgICBsYXR0aWNlXzAuMjAtMzUgICAgICBoYXZlbl8xLjEuMiAgICAgICAgICBzcGxpbmVzXzMuNS4xICAgICAgIFxuWzYxXSBobXNfMC40LjIgICAgICAgICAgICBrbml0cl8xLjIwICAgICAgICAgICBwaWxsYXJfMS4zLjAgICAgICAgICBGYWN0b0NsYXNzXzEuMi43ICAgIFxuWzY1XSBmZmJhc2VfMC4xMi4zICAgICAgICBjb2RldG9vbHNfMC4yLTE1ICAgICBmYXN0bWF0Y2hfMS4xLTAgICAgICBnbHVlXzEuMy4wICAgICAgICAgIFxuWzY5XSBldmFsdWF0ZV8wLjExICAgICAgICBkYXRhLnRhYmxlXzEuMTEuNCAgICBtb2RlbHJfMC4xLjIgICAgICAgICBmb3JlYWNoXzEuNC40ICAgICAgIFxuWzczXSBjZWxscmFuZ2VyXzEuMS4wICAgICBndGFibGVfMC4yLjAgICAgICAgICBhc3NlcnR0aGF0XzAuMi4wICAgICBwcm9kbGltXzIwMTguMDQuMTggIFxuWzc3XSB4dGFibGVfMS44LTMgICAgICAgICBicm9vbV8wLjUuMCAgICAgICAgICBmZl8yLjItMTQgICAgICAgICAgICBlMTA3MV8xLjctMCAgICAgICAgIFxuWzgxXSBjbGFzc183LjMtMTQgICAgICAgICBzdXJ2aXZhbF8yLjQyLTMgICAgICBpdGVyYXRvcnNfMS4wLjEwICAgICBtZW1vaXNlXzEuMS4wICAgICAgIFxuWzg1XSBsYXZhXzEuNi4zICAgICAgICAgICBpcHJlZF8wLjktNyAgICAgICAgIFxuIn0= -->
+<pre><code>R version 3.5.1 (2018-07-02)
+Platform: x86_64-apple-darwin15.6.0 (64-bit)
+Running under: macOS  10.14
+
+Matrix products: default
+BLAS: /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib
+LAPACK: /Library/Frameworks/R.framework/Versions/3.5/Resources/lib/libRlapack.dylib
+
+locale:
+[1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+ [1] bindrcpp_0.2.2  fastLink_0.4.0  bfuncs_0.2.1    forcats_0.3.0   stringr_1.3.1   dplyr_0.7.6    
+ [7] purrr_0.2.5     readr_1.1.1     tidyr_0.8.1     tibble_1.4.2    ggplot2_3.0.0   tidyverse_1.2.1
+
+loaded via a namespace (and not attached):
+ [1] nlme_3.1-137         lubridate_1.7.4      bit64_0.9-7          doParallel_1.0.14   
+ [5] httr_1.3.1           rprojroot_1.3-2      evd_2.3-3            tools_3.5.1         
+ [9] backports_1.1.2      R6_2.2.2             rpart_4.1-13         KernSmooth_2.23-15  
+[13] DBI_1.0.0            lazyeval_0.2.1       colorspace_1.3-2     ade4_1.7-13         
+[17] nnet_7.3-12          withr_2.1.2          tidyselect_0.2.4     bit_1.1-14          
+[21] compiler_3.5.1       cli_1.0.0            rvest_0.3.2          adagio_0.7.1        
+[25] xml2_1.2.0           scales_1.0.0         digest_0.6.16        rmarkdown_1.10      
+[29] stringdist_0.9.5.1   base64enc_0.1-3      pkgconfig_2.0.2      htmltools_0.3.6     
+[33] RecordLinkage_0.4-10 plotrix_3.7-4        rlang_0.2.2          readxl_1.1.0        
+[37] rstudioapi_0.7       RSQLite_2.1.1        bindr_0.1.1          jsonlite_1.5        
+[41] gtools_3.8.1         magrittr_1.5         feather_0.3.1        ada_2.0-5           
+[45] Matrix_1.2-14        Rcpp_0.12.18         munsell_0.5.0        scatterplot3d_0.3-41
+[49] stringi_1.2.4        yaml_2.2.0           MASS_7.3-50          plyr_1.8.4          
+[53] grid_3.5.1           blob_1.1.1           parallel_3.5.1       ggrepel_0.8.0       
+[57] crayon_1.3.4         lattice_0.20-35      haven_1.1.2          splines_3.5.1       
+[61] hms_0.4.2            knitr_1.20           pillar_1.3.0         FactoClass_1.2.7    
+[65] ffbase_0.12.3        codetools_0.2-15     fastmatch_1.1-0      glue_1.3.0          
+[69] evaluate_0.11        data.table_1.11.4    modelr_0.1.2         foreach_1.4.4       
+[73] cellranger_1.1.0     gtable_0.2.0         assertthat_0.2.0     prodlim_2018.04.18  
+[77] xtable_1.8-3         broom_0.5.0          ff_2.2-14            e1071_1.7-0         
+[81] class_7.3-14         survival_2.42-3      iterators_1.0.10     memoise_1.1.0       
+[85] lava_1.6.3           ipred_0.9-7         </code></pre>
+<!-- rnb-output-end -->
 <!-- rnb-chunk-end -->
 </div>
 
-<div id="rmd-source-code">LS0tCnRpdGxlOiAiRGVpZGVudGlmeSBNZXJnZWQgTWVkU3RhciBhbmQgQVBTIERhdGEiCmRhdGU6ICJDcmVhdGVkOiAyMDE4LTEwLTE2IDxicj4gVXBkYXRlZDogYHIgU3lzLkRhdGUoKWAiCm91dHB1dDogCiAgaHRtbF9ub3RlYm9vazoKICAgIGNzczogY3VzdG9tLWNzcy5jc3MKLS0tCgojIFRhYmxlIG9mIGNvbnRlbnRzCgoqIFtPdmVydmlld10oI292ZXJ2aWV3KSAgIAoqIFtMb2FkIHBhY2thZ2VzIGFuZCBkYXRhXSgjbG9hZCkgICAKKiBbXSAgIAoKIyBPdmVydmlldwoKUmVtb3ZlIGlkZW50aWZpZXJzIGZyb20gdGhlIG1lcmdlZCBNZWRTdGFyL0FQUyBkYXRhIHNvIHRoYXQgaXQgY2FuIGJlIHVwbG9hZGVkIHRvIFtOQUNKRF0oIGh0dHBzOi8vd3d3LmljcHNyLnVtaWNoLmVkdS9pY3BzcndlYi9jb250ZW50L05BQ0pEL2luZGV4Lmh0bWwpCgojIExvYWQgcGFja2FnZXMgYW5kIGRhdGEgeyNsb2FkfQoKYGBge3Igc2V0dXAsIGluY2x1ZGU9RkFMU0V9CmtuaXRyOjpvcHRzX2NodW5rJHNldChjb21tZW50ID0gTkEpClN5cy5zZXRlbnYoVFogPSAiVVMvQ2VudHJhbCIpCmBgYAoKYGBge3IgbWVzc2FnZT1GQUxTRX0KbGlicmFyeSh0aWR5dmVyc2UpCmxpYnJhcnkoYmZ1bmNzKQpgYGAKCk1lcmdlZCBNZWRTdGFyIGFuZCBBUFMgZGF0YS4gQ3JlYXRlZCBpbiBkYXRhX21lZHN0YXJfYXBzX21lcmdlZF8wMV9tZXJnZS5SbWQKCmBgYHtyfQptZWRzdGFyX2Fwc19tZXJnZWQgPC0gZmVhdGhlcjo6cmVhZF9mZWF0aGVyKCIvVm9sdW1lcy9EZXRlY3QvbWVkc3Rhcl9hcHNfbWVyZ2VkLmZlYXRoZXIiKQpgYGAKCmBgYHtyfQphYm91dF9kYXRhKG1lZHN0YXJfYXBzX21lcmdlZCkgIyA2NCw4Mzcgb2JzZXJ2YXRpb25zIGFuZCA2MSB2YXJpYWJsZXMKYGBgCgoKCgoKCgoKCgojIFNlY3Rpb24gMSB7I3NlY3Rpb24tMX0KCmBgYHtyfQoKYGBgCgpbdG9wXSgjdG9wKQoKCiZuYnNwOwoKLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQoKYGBge3IgZWNobz1GQUxTRX0Kc2Vzc2lvbkluZm8oKQpgYGAK</div>
+<div id="rmd-source-code">LS0tCnRpdGxlOiAiRGVpZGVudGlmeSBNZXJnZWQgTWVkU3RhciBhbmQgQVBTIERhdGEiCmRhdGU6ICJDcmVhdGVkOiAyMDE4LTEwLTE2IDxicj4gVXBkYXRlZDogYHIgU3lzLkRhdGUoKWAiCm91dHB1dDogCiAgaHRtbF9ub3RlYm9vazoKICAgIGNzczogY3VzdG9tLWNzcy5jc3MKLS0tCgojIFRhYmxlIG9mIGNvbnRlbnRzCgoqIFtPdmVydmlld10oI292ZXJ2aWV3KSAgIAoqIFtMb2FkIHBhY2thZ2VzIGFuZCBkYXRhXSgjbG9hZCkgICAKKiBbQ3JlYXRlIGFuIGFub255bW91cyB1bmlxdWUgcGVyc29uIGlkIG51bWJlcl0oI3BlcnNvbi1pZCkgICAKKiBbRGVpZGVudGlmeSB0aGUgcmVzcG9uc2UgbnVtYmVycyBmb3IgdGhlIE1lZFN0YXIgbGVnYWwgY29tcGxpYW5jZSBkZXBhcnRtZW50XSgjZGVpZGVudGlmeS0xKSAgIAoqIFtEZWlkZW50aWZ5IHRoZSBtZXJnZWQgZGF0YXNldF0oI2RlaWRlbnRpZnktMikgICAgCiogW1NhdmUgZGVpZGVudGlmaWVkIHZlcnNpb24gb2YgbWVyZ2VkIGRhdGFzZXRdKCNzYXZlKSAgIAoqIFtDb3VudCByb3dzLCB1bmlxdWUgcmVzcG9uc2VzLCBhbmQgdW5pcXVlIHBlb3BsZV0oI2NvdW50cykgICAKCgojIE92ZXJ2aWV3CgoqIFJlbW92ZSBpZGVudGlmaWVycyBmcm9tIHRoZSBtZXJnZWQgTWVkU3Rhci9BUFMgZGF0YSBzbyB0aGF0IGl0IGNhbiBiZSB1cGxvYWRlZCB0byBbTkFDSkRdKCBodHRwczovL3d3dy5pY3Bzci51bWljaC5lZHUvaWNwc3J3ZWIvY29udGVudC9OQUNKRC9pbmRleC5odG1sKSAtIGluY2x1ZGluZyBhIHVuaXF1ZSBwZXJzb24gaWQgbnVtYmVyLgoKCiMgTG9hZCBwYWNrYWdlcyBhbmQgZGF0YSB7I2xvYWR9CgpgYGB7ciBzZXR1cCwgaW5jbHVkZT1GQUxTRX0Ka25pdHI6Om9wdHNfY2h1bmskc2V0KGNvbW1lbnQgPSBOQSkKU3lzLnNldGVudihUWiA9ICJVUy9DZW50cmFsIikKYGBgCgpgYGB7ciBtZXNzYWdlPUZBTFNFfQpsaWJyYXJ5KHRpZHl2ZXJzZSkKbGlicmFyeShiZnVuY3MpCmxpYnJhcnkoZmFzdExpbmspCmBgYAoKTWVyZ2VkIE1lZFN0YXIgYW5kIEFQUyBkYXRhLiBDcmVhdGVkIGluIGRhdGFfbWVkc3Rhcl9hcHNfbWVyZ2VkXzAxX21lcmdlLlJtZAoKYGBge3J9Cm1lZHN0YXJfYXBzX21lcmdlZCA8LSBmZWF0aGVyOjpyZWFkX2ZlYXRoZXIoIi9Wb2x1bWVzL0RldGVjdC9tZWRzdGFyX2Fwc19tZXJnZWQuZmVhdGhlciIpCmBgYAoKYGBge3J9CmFib3V0X2RhdGEobWVkc3Rhcl9hcHNfbWVyZ2VkKSAjIDY2LDIwMCBvYnNlcnZhdGlvbnMgYW5kIDU3IHZhcmlhYmxlcwpgYGAKCgojIyBSZXNwb25zZSBJRCdzIGZyb20gTWVkU3RhciBjb21wbGlhbmNlIGRhdGEKClRoZXNlIGFyZSB0aGUgcmVzcG9uc2UgaWQgbnVtYmVycyB0aGF0IGNvcnJlc3BvbmQgdG8gOTExIHJlc3BvbnNlcyB3aGVyZSBhIHJlcG9ydCB3YXMgbWFkZSB0byBBUFMgZHVyaW5nIHRoZSBERVRFQ1QgcGlsb3QgcGhhc2UgYW5kIE1lZFN0YXIgY29tcGxpYW5jZSB3YXMgbWFkZSBhd2FyZSBvZiB0aGUgcmVwb3J0LiAKCkRhdGEgZnJvbSBkYXRhX21lZHN0YXJfY29tcGxpYW5jZV8wMV9pbXBvcnQuUm1kCgpgYGB7cn0KcmVzcG9uc2VfaWRzIDwtIGZlYXRoZXI6OnJlYWRfZmVhdGhlcigiL1ZvbHVtZXMvRGV0ZWN0L3Jlc3BvbnNlX2lkcy5mZWF0aGVyIikKYGBgCgpgYGB7cn0KYWJvdXRfZGF0YShyZXNwb25zZV9pZHMpICMgMTQgb2JzZXJ2YXRpb25zIGFuZCAxIHZhcmlhYmxlCmBgYAoKCgoKCgoKCgoKIyBDcmVhdGUgYW4gYW5vbnltb3VzIHVuaXF1ZSBwZXJzb24gaWQgbnVtYmVyIHsjcGVyc29uLWlkfQoKU29tZSBwZW9wbGUgd2VyZSB0cmVhdGVkIGJ5IE1lZFN0YXIgYW5kL29yIGludmVzdGlnYXRlZCBieSBBUFMgbW9yZSB0aGFuIG9uZSB0aW1lLiBUaGVyZWZvcmUsIG5laXRoZXIgaW5jaWRlbnQgcGNyIG51bWJlciBub3IgY2FzZSBudW1iZXIgdW5pcXVlbHkgaWRlbnRpZmllcyBwZW9wbGUuIEZvciBtYW55IG1lYXN1cmVzLCB0aGlzIGRvZXNuJ3QgbWF0dGVyIGJlY2F1c2Ugd2UgYXJlIGludGVyZXN0ZWQgaW4gb3V0Y29tZXMgYXQgdGhlIGluY2lkZW50IGxldmVsLiBIb3dldmVyLCBpdCBkb2VzIG1hdHRlciBmb3IgYSBjb3VwbGUgb2YgZGVtb2dyYXBoaWMgbWVhc3VyZXMgbGlrZSBhZ2UsIHJhY2UsIGV0Yy4KCkluaXRpYWxseSwgd2UgYXR0ZW1wdGVkIHRvIHVuaXF1ZWx5IGlkZW50aWZ5IHBlb3BsZSBiYXNlZCBvbiBhIGNvbWJpbmF0aW9uIG9mIG5hbWUgYW5kIERPQi4gSG93ZXZlciwgY3JlYXRpbmcgYSB1bmlxdWUgaWRlbnRpZmllciB0aGlzIHdheSBpcyBjb21wbGljYXRlZCBieSBkYXRhIGVudHJ5IGVycm9ycyAoaS5lLiwgbWlzc3BlbGxlZCBuYW1lcyBhbmQgbWlzdHlwZWQgZGF0ZXMgb2YgYmlydGgpLiBGb3IgZXhhbXBsZSwgam9obl9zbWl0aF8xOTM2XzEwXzAzIGFuZCBqb25fc21pdGhfMTkzNl8xMF8wMyBtYXkgYmUgdGhlIHNhbWUgcGVyc29uLCBidXQgd291bGQgZ2VuZXJhdGUgdHdvIGRpZmZlcmVudCB1bmlxdWUgaWQgbnVtYmVycy4gCgpJbnN0ZWFkLCB3ZSBjYW4gdXNlIGZhc3RMaW5rIHRvIHNlYXJjaCBmb3IgbmFtZXMgYW5kIERPQidzIHRoYXQgYXJlIGxpa2VseSB0byBiZSB0aGUgc2FtZSBwZXJzb24gYW5kIGFzc2lnbiB0aGVtIGEgdW5pcXVlIHBlcnNvbiBpZC4KCklmIHdlIGRvIHRoaXMgb24gdGhlIGVudGlyZSBkYXRhc2V0IGF0IG9uY2UsIGl0IGlzIGEgY29zdGx5IHByb2Nlc3MuIEl0IGJlY29tZXMgbXVjaCBtb3JlIHRyYWN0YWJsZSBpZiB3ZSB0ZW1wb3JhcmlseSByZWR1Y2UgdGhlIGRhdGEgdG8gb25lIHJvdyBmb3IgZWFjaCBjb21iaW5hdGlvbiBvZiB2YWx1ZXMgdGhhdCB3ZSB3YW50IHRvIGludmVzdGlnYXRlLiBJbiB0aGlzIGNhc2UsIHdlIHdhbnQgdG8gaW52ZXN0aWdhdGUgYWxsIHVuaXF1ZSBjb21iaW5hdGlvbnMgb2YgbmFtZSwgRE9CLCBhbmQgYWRkcmVzcy4KCiMjIENvZXJjZSBzZWxlY3RlZCB2YXJpYWJsZXMgdG8gbnVtZXJpYwoKYGBge3J9Cm1lZHN0YXJfYXBzX21lcmdlZCA8LSBtZWRzdGFyX2Fwc19tZXJnZWQgJT4lIAogIAogICMgQ29lcmNlIHNlbGVjdGVkIHZhcmlhYmxlcyB0byBudW1lcmljCiAgbXV0YXRlX2F0KAogICAgdmFycyhhZ2UsIGJpcnRoX3llYXIsIGJpcnRoX21udGgsIGJpcnRoX2RheSwgYWRkcmVzc19udW0sIHppcCksCiAgICBhcy5udW1lcmljCiAgKSAlPiUgCiAgCiAgIyBBZGQgZ3JvdXAgdmFyaWFibGUgKGNvbWJpbmF0aW9uIG9mIHZhbHVlcyBvZiBpbnRlcmVzdCkKICBtdXRhdGUoCiAgICBncm91cCA9IHBhc3RlKGZpcnN0X25hbWUsIGxhc3RfbmFtZSwgYmlydGhfeWVhciwgYmlydGhfbW50aCwgYmlydGhfZGF5LCBhZGRyZXNzX3N0cmVldCwgc2VwID0gIl8iKQogICkKYGBgCgpgYGB7cn0KYWJvdXRfZGF0YShtZWRzdGFyX2Fwc19tZXJnZWQpICMgNjYsMjAwIG9ic2VydmF0aW9ucyBhbmQgNTggdmFyaWFibGVzCmBgYAoKCmBgYHtyfQp0ZW1wIDwtIG1lZHN0YXJfYXBzX21lcmdlZCAlPiUgCiAgIyBLZWVwIG9uZSByb3cgZm9yIGV2ZXJ5IGNvbWJpbmF0aW9uIG9mIGZpcnN0IG5hbWUsIGxhc3QgbmFtZSwgZG9iLCBhbmQgYWRkcmVzcwogICMgQ2FuJ3QgdXNlIHBjciBiZWNhdXNlIG5vdCBldmVyeWJvZHkgaGFzIG9uZQogIGdyb3VwX2J5KGdyb3VwKSAlPiUgCiAgZmlsdGVyKHJvd19udW1iZXIoKSA9PSAxKSAlPiUgCiAgdW5ncm91cCgpCmBgYAoKYGBge3J9CmFib3V0X2RhdGEodGVtcCkgIyAxLDc1NSBvYnNlcnZhdGlvbnMgYW5kIDU4IHZhcmlhYmxlcwpgYGAKCmBgYHtyfQpmYXN0bGlua19vdXQgPC0gZmFzdExpbmsoCiAgZGZBID0gdGVtcCwKICBkZkIgPSB0ZW1wLAogIHZhcm5hbWVzID0gYygiZmlyc3RfbmFtZSIsICJsYXN0X25hbWUiLCAiYmlydGhfeWVhciIsICJiaXJ0aF9tbnRoIiwgImJpcnRoX2RheSIsICJhZGRyZXNzX3N0cmVldCIpLAogIGRlZHVwZS5tYXRjaGVzID0gRkFMU0UKKQpgYGAKCmBgYHtyfQpmYXN0bGlua19tYXRjaGVzIDwtIHRpYmJsZSgKICByb3cgICAgID0gZmFzdGxpbmtfb3V0JG1hdGNoZXMkaW5kcy5iLAogIG1hdGNoZXMgPSBmYXN0bGlua19vdXQkbWF0Y2hlcyRpbmRzLmEKKQpgYGAKCmBgYHtyfQpwZXJzb25fa2V5IDwtIGZhc3RsaW5rX21hdGNoZXMgJT4lCiAgCiAgIyBHZXQgdGhlIG1hdGNoZXMgaW50byB0aGUgZm9ybSB0aGF0IEkgbmVlZCBmb3Igam9pbmluZyBiYWNrIHRvIHRoZSBkYXRhCiAgZ3JvdXBfYnkocm93KSAlPiUgCiAgbXV0YXRlKG1hdGNoZXMgPSBsaXN0KG1hdGNoZXMpKSAlPiUgIyBDcmVhdGUgbGlzdCBjb2x1bW4KICB1bmdyb3VwKCkgJT4lIAogIG11dGF0ZShtYXRjaGVzID0gcHVycnI6Om1hcF9jaHIobWF0Y2hlcywgfiBwYXN0ZSguLCBjb2xsYXBzZSA9ICIsIikpKSAlPiUgIyBUdXJuIGxpc3QgaW50byBjaGFyYWN0ZXIgc3RyaW5nCiAgc2VsZWN0KG1hdGNoZXMpICU+JSAKICBkaXN0aW5jdCgpICU+JSAjIFJlZHVjZSB0byAxIHJvdyBwZXIgZ3JvdXAgb2YgbWF0Y2hlcwogIG11dGF0ZSgKICAgIHBlcnNvbl9pZCA9IHJvd19udW1iZXIoKSwKICAgIHJvdyA9IHB1cnJyOjptYXAobWF0Y2hlcywgfiBzY2FuKHRleHQgPSAuLCB3aGF0ID0gMEwsIHNlcCA9ICIsIiwgcXVpZXQgPSBUUlVFKSkgIyBUdXJuIGJhY2sgaW50byBsaXN0CiAgKSAlPiUgCiAgdW5uZXN0KCkgJT4lIAogIHNlbGVjdChwZXJzb25faWQsIHJvdykgJT4lIAogIAogICMgSm9pbiB0byB0ZW1wCiAgcmlnaHRfam9pbigKICAgIHRlbXAgJT4lIAogICAgICBtdXRhdGUocm93ID0gcm93X251bWJlcigpKSwKICAgIGJ5ID0gInJvdyIKICApICU+JSAKICBzZWxlY3QocGVyc29uX2lkLCBncm91cCkKYGBgCgoKIyMgRGF0YSBjaGVjawoKQWRkIHBlcnNvbiBpZCB0byB0aGUgZnVsbCBkYXRhc2V0CgpgYGB7cn0KZGF0YV9jaGVjayA8LSBtZWRzdGFyX2Fwc19tZXJnZWQgJT4lIAogIGxlZnRfam9pbihwZXJzb25fa2V5LCBieSA9ICJncm91cCIpCmBgYAoKTWFudWFsbHkgaW5zcGVjdCByb3dzIHdpdGggZGlmZmVyZW50IHZhbHVlcyB0aGF0IHdlcmUgY29uc2lkZXJlZCB0aGUgc2FtZSBwZXJzb24uIExvb2sgaW5zdGFuY2VzIHdoZW4gdGhpcyBhcHBlYXJzIHRvIGhhdmUgYmVlbiBkb25lIGluYXBwcm9wcmlhdGVseSAocmVzdWx0cyBoaWRkZW4gdG8gcHJvdGVjdCBwcml2YWN5KS4KCmBgYHtyIGV2YWw9RkFMU0V9CmRhdGFfY2hlY2sgJT4lIAogIGdyb3VwX2J5KHBlcnNvbl9pZCwgZmlyc3RfbmFtZSwgbGFzdF9uYW1lLCBiaXJ0aF95ZWFyLCBiaXJ0aF9tbnRoLCBiaXJ0aF9kYXksIGFkZHJlc3Nfc3RyZWV0KSAlPiUgCiAgZmlsdGVyKHJvd19udW1iZXIoKSA9PSAxKSAlPiUgCiAgYXJyYW5nZShwZXJzb25faWQpICU+JSAKICBzZWxlY3QocGVyc29uX2lkLCBldmVyeXRoaW5nKCkpICU+JSAKICBncm91cF9ieShwZXJzb25faWQpICU+JSAKICBmaWx0ZXIobWF4KHJvd19udW1iZXIoKSkgPiAxKQpgYGAKClRoZSBwcm9jZXNzIGFwcGVhcnMgdG8gaGF2ZSB3b3JrZWQgYXMgZXhwZWN0ZWQuCgoKIyMgQWRkIHBlcnNvbiBpZCB0byB0aGUgZnVsbCBkYXRhc2V0CgpgYGB7cn0KbWVkc3Rhcl9hcHNfbWVyZ2VkIDwtIG1lZHN0YXJfYXBzX21lcmdlZCAlPiUgCiAgbGVmdF9qb2luKHBlcnNvbl9rZXksIGJ5ID0gImdyb3VwIikgJT4lIAogIHNlbGVjdCgtZ3JvdXApCmBgYAoKYGBge3J9CmFib3V0X2RhdGEobWVkc3Rhcl9hcHNfbWVyZ2VkKSAjIDY2LDIwMCBvYnNlcnZhdGlvbnMgYW5kIDU4IHZhcmlhYmxlcwpgYGAKCgojIyBDbGVhbiB1cAoKYGBge3J9CnJtKGRhdGFfY2hlY2ssIGZhc3RsaW5rX21hdGNoZXMsIGZhc3RsaW5rX291dCwgcGVyc29uX2tleSwgdGVtcCkKYGBgCgpbdG9wXSgjdG9wKQoKCgoKCgoKCgoKIyBEZWlkZW50aWZ5IHRoZSByZXNwb25zZSBudW1iZXJzIGZyb20gdGhlIE1lZFN0YXIgbGVnYWwgY29tcGxpYW5jZSBkZXBhcnRtZW50IHsjZGVpZGVudGlmeS0xfQoKVGhpcyBoYXMgdG8gYmUgZG9uZSBiZWZvcmUgZGVpZGVudGlmeWluZyB0aGUgaW5jaWVudCBjYWxsIG51bWJlci4KCkNoZWNrIHRvIHNlZSBpZiB0aGUgZXhwZWN0ZCByZXNwb25zZSBudW1iZXJzIGZyb20gdGhlIE1lZFN0YXIgY29tcGxpYW5jZSBkYXRhIGV4aXN0IGluIHRoZSBtZXJnZWQgZGF0YS4gCgpJbiBkYXRhX21lZHN0YXJfZGV0ZWN0X3NjcmVlbmluZ3NfMDFfaW1wb3J0LlJtZCB0aGVyZSB3ZXJlIDggcmVzcG9uc2UgaWQncyBmcm9tIHRoZSBjb21wbGlhbmNlIGRhdGEgdGhhdCBoYWQgYSBtYXRjaCBpbiB0aGUgREVURUNUIHNjcmVlbmluZyB0b29sIGRhdGEuCgpgYGB7cn0KYWJvdXRfZGF0YShyZXNwb25zZV9pZHMpICMgMTQgb2JzZXJ2YXRpb25zIGFuZCAxIHZhcmlhYmxlcwpgYGAKCmFudGlfam9pbiByZXR1cm5zIGFsbCByb3dzIGluIE1lZFN0YXIncyBsZWdhbCBjb21wbGlhbmNlIGRhdGEgdGhhdCBkbyBub3QgaGF2ZSBhIG1hdGNoIGluIHRoZSBNZWRTdGFyIERFVEVDVCBzY3JlZW5pbmcgaXRlbXMgZGF0YSB0aGF0IHdhcyBtYXRjaGVkIHRvIEFQUyBjYXNlcyAocmVzdWx0cyBoaWRkZW4gdG8gcHJvdGVjdCBwYXJ0aWNpcGFudCBwcml2YWN5KS4KCmBgYHtyIGV2YWw9RkFMU0V9CnJlc3BvbnNlX2lkcyAlPiUgCiAgYW50aV9qb2luKG1lZHN0YXJfYXBzX21lcmdlZCAlPiUgCiAgICAgICAgICAgICAgZ3JvdXBfYnkoaW5jaWRlbnRfcGNyX251bWJlcikgJT4lIAogICAgICAgICAgICAgIGZpbHRlcihyb3dfbnVtYmVyKCkgPT0gMSksIAogICAgICAgICAgICBieSA9IGMoInJlc3BvbnNlX251bSIgPSAiaW5jaWRlbnRfY2FsbF9udW1iZXIiKSkgJT4lICAKICB1bmlxdWUoKSAjIDYgaW5jaWRlbnQgcGNyIG51bWJlcnMKYGBgCgpUaGVyZSBhcmUgNiByZXNwb25zZXMgaWQncyBpbiB0aGUgTWVkU3RhciBjb21wbGlhbmNlIGRhdGEgdGhhdCBkb24ndCBhcHBlYXIgaW4gdGhlIE1lZFN0YXIgREVURUNUIHNjcmVlbmluZyBpdGVtcyBkYXRhIChyZXN1bHRzIGhpZGRlbiB0byBwcm90ZWN0IHBhcnRpY2lwYW50IHByaXZhY3kpLiAKCkkgaGF2ZSBhbiBlbWFpbCBmcm9tIE1lZFN0YXIgZnJvbSAyMDE2LTEwLTEwIG91dGxpbmluZyB0aGUgZGlzY3JlcGFuY3kuIE9uZSByZXNwb25zZSBpZCBoYWQgYWxsIG51bGxzIGZvciB0aGUgREVURUNUIHNjcmVlbmluZyBpdGVtcyAoLi4uMTQ3KS4gT25lIHJlc3BvbnNlIGlkIGNvdWxkIG5vdCBiZSBmb3VuZCBpbiB0aGUgcXVlcnkuIFRoZSByZXN0IHdlcmUgaW5lbGlnaWJsZSBmb3IgdGhlIERFVEVDVCBzY3JlZW5pbmcgdG9vbCBiZWNhdXNlIG9mIGFnZS4KCkF0IHRoaXMgcG9pbnQsIHRoZXJlIHNob3VsZCBiZSA4IHJlc3BvbnNlIGlkJ3MgZnJvbSB0aGUgY29tcGxpYW5jZSBkYXRhIHRoYXQgaGF2ZSBhIG1hdGNoIGluIHRoZSBtZXJnZWQgTWVkU3Rhci9BUFMgZGF0YSAocmVzdWx0cyBoaWRkZW4gdG8gcHJvdGVjdCBwYXJ0aWNpcGFudCBwcml2YWN5KS4KCmBgYHtyIGV2YWw9RkFMU0V9CnJlc3BvbnNlX2lkcyAlPiUgCiAgc2VtaV9qb2luKG1lZHN0YXJfYXBzX21lcmdlZCAlPiUgCiAgICAgICAgICAgICAgZ3JvdXBfYnkoaW5jaWRlbnRfcGNyX251bWJlcikgJT4lIAogICAgICAgICAgICAgIGZpbHRlcihyb3dfbnVtYmVyKCkgPT0gMSksIAogICAgICAgICAgICBieSA9IGMoInJlc3BvbnNlX251bSIgPSAiaW5jaWRlbnRfY2FsbF9udW1iZXIiKSkgJT4lIAogIHVuaXF1ZSgpICMgOCBpbmNpZGVudCBwY3IgbnVtYmVycwpgYGAKCk5vdyB3ZSBuZWVkIGEgd2F5IHRvIHRyYWNrIHRoZXNlIGNhc2VzIGdvaW5nIGZvcndhcmQgd2l0aG91dCB1c2luZyBhIG51bWJlciB0aGF0IGhhcyBtZWFuaW5nIGluIE1lZFN0YXIncyBkYXRhYmFzZS4KCldlIHdpbGwganVzdCBhZGQgYSBuZXcgdmFyaWFibGUgdG8gdGhlIG1lcmdlZCBkYXRhIHRoYXQgaW5kaWNhdGVzIGl0IHdhcyBtYXRjaCB3aXRoIHRoZSBjb21wbGlhbmNlIGRhdGEuIAoKYGBge3J9CmluX2NvbXBsaWFuY2VfZGF0YSA8LSByZXNwb25zZV9pZHMgJT4lIAogIHNlbWlfam9pbihtZWRzdGFyX2Fwc19tZXJnZWQgJT4lIAogICAgICAgICAgICAgIGdyb3VwX2J5KGluY2lkZW50X3Bjcl9udW1iZXIpICU+JSAKICAgICAgICAgICAgICBmaWx0ZXIocm93X251bWJlcigpID09IDEpLCAKICAgICAgICAgICAgYnkgPSBjKCJyZXNwb25zZV9udW0iID0gImluY2lkZW50X2NhbGxfbnVtYmVyIikpICU+JSAKICB1bmlxdWUoKSAlPiUgCiAgbXV0YXRlKGluX2NvbXBsaWFuY2VfZGF0YSA9IDFMKQpgYGAKCmBgYHtyfQptZWRzdGFyX2Fwc19tZXJnZWQgPC0gbWVkc3Rhcl9hcHNfbWVyZ2VkICU+JSAKICBsZWZ0X2pvaW4oaW5fY29tcGxpYW5jZV9kYXRhLCBieSA9IGMoImluY2lkZW50X2NhbGxfbnVtYmVyIiA9ICJyZXNwb25zZV9udW0iKSkgJT4lIAogIG11dGF0ZShpbl9jb21wbGlhbmNlX2RhdGEgPSBpZl9lbHNlKGlzLm5hKGluX2NvbXBsaWFuY2VfZGF0YSksIDBMLCBpbl9jb21wbGlhbmNlX2RhdGEpKQpgYGAKCmBgYHtyfQphYm91dF9kYXRhKG1lZHN0YXJfYXBzX21lcmdlZCkgIyA2NiwyMDAgb2JzZXJ2YXRpb25zIGFuZCA1OSB2YXJpYWJsZXMKYGBgCgoKIyMgRGF0YSBjaGVjawoKQXQgdGhpcyBwb2ludCwgdGhlcmUgc2hvdWxkIGJlIDggcmVzcG9uc2UgaWQncyBmcm9tIHRoZSBjb21wbGlhbmNlIGRhdGEgdGhhdCBoYXZlIGEgbWF0Y2ggaW4gdGhlIG1lcmdlZCBNZWRTdGFyL0FQUyBkYXRhIChyZXN1bHRzIGhpZGRlbiB0byBwcm90ZWN0IHBhcnRpY2lwYW50IHByaXZhY3kpLgoKYGBge3IgZXZhbD1GQUxTRX0KbWVkc3Rhcl9hcHNfbWVyZ2VkICU+JSAKICBmaWx0ZXIoaW5fY29tcGxpYW5jZV9kYXRhID09IDEpICU+JSAKICBncm91cF9ieShpbmNpZGVudF9jYWxsX251bWJlcikgJT4lIAogIGZpbHRlcihyb3dfbnVtYmVyKCkgPT0gMSkgIyA4IHJvd3MKYGBgCgoKIyMgQ2xlYW4gdXAKCmBgYHtyfQpybShpbl9jb21wbGlhbmNlX2RhdGEsIHJlc3BvbnNlX2lkcykKYGBgCgpbdG9wXSgjdG9wKQoKCgoKCgoKCgoKIyBEZWlkZW50aWZ5IHRoZSBtZXJnZWQgZGF0YXNldCB7I2RlaWRlbnRpZnktMn0KCldlIG5lZWQgdG8gY3JlYXRlIGRlaWRlbnRpZmllZCBkYXRhc2V0cyBmb3IgW05BQ0pEXShodHRwczovL3d3dy5pY3Bzci51bWljaC5lZHUvaWNwc3J3ZWIvY29udGVudC9OQUNKRC9pbmRleC5odG1sKS4KCgojIyBTYXZlIGN1cnJlbnQgb3JkZXIgb2YgdmFyaWFibGVzCgpgYGB7cn0KY3VycmVudF9vcmRlciA8LSBuYW1lcyhtZWRzdGFyX2Fwc19tZXJnZWQpCmBgYAoKCiMjIEluY2lkZW50IGNhbGwgbnVtYmVycwoKYGBge3J9Cm1lZHN0YXJfYXBzX21lcmdlZCA8LSBtZWRzdGFyX2Fwc19tZXJnZWQgJT4lIAogIHNlbGVjdChpbmNpZGVudF9jYWxsX251bWJlcikgJT4lIAogIHVuaXF1ZSgpICU+JSAKICBtdXRhdGUobmV3ID0gcm93X251bWJlcigpKSAlPiUgCiAgcmlnaHRfam9pbihtZWRzdGFyX2Fwc19tZXJnZWQsIGJ5ID0gImluY2lkZW50X2NhbGxfbnVtYmVyIikgJT4lIAogICMgUHJldmVudCBhc3NpZ25pbmcgbnVtYmVyIHRvIE5BCiAgbXV0YXRlKG5ldyA9IGlmX2Vsc2UoaXMubmEoaW5jaWRlbnRfY2FsbF9udW1iZXIpLCBOQV9pbnRlZ2VyXywgbmV3KSkgJT4lIAogIG11dGF0ZShpbmNpZGVudF9jYWxsX251bWJlciA9IG5ldykgJT4lIAogIHNlbGVjdCgtbmV3KQpgYGAKCgojIyBJbmNpZGVudCBwY3IgbnVtYmVycwoKYGBge3J9Cm1lZHN0YXJfYXBzX21lcmdlZCA8LSBtZWRzdGFyX2Fwc19tZXJnZWQgJT4lIAogIHNlbGVjdChpbmNpZGVudF9wY3JfbnVtYmVyKSAlPiUgCiAgdW5pcXVlKCkgJT4lIAogIG11dGF0ZShuZXcgPSByb3dfbnVtYmVyKCkpICU+JSAKICByaWdodF9qb2luKG1lZHN0YXJfYXBzX21lcmdlZCwgYnkgPSAiaW5jaWRlbnRfcGNyX251bWJlciIpICU+JSAKICAjIFByZXZlbnQgYXNzaWduaW5nIG51bWJlciB0byBOQQogIG11dGF0ZShuZXcgPSBpZl9lbHNlKGlzLm5hKGluY2lkZW50X3Bjcl9udW1iZXIpLCBOQV9pbnRlZ2VyXywgbmV3KSkgJT4lCiAgbXV0YXRlKGluY2lkZW50X3Bjcl9udW1iZXIgPSBuZXcpICU+JSAKICBzZWxlY3QoLW5ldykKYGBgCgoKIyMgQ2FzZSBudW1iZXJzCgpgYGB7cn0KbWVkc3Rhcl9hcHNfbWVyZ2VkIDwtIG1lZHN0YXJfYXBzX21lcmdlZCAlPiUgCiAgc2VsZWN0KGNhc2VfbnVtKSAlPiUgCiAgdW5pcXVlKCkgJT4lIAogIG11dGF0ZShuZXcgPSByb3dfbnVtYmVyKCkpICU+JSAKICByaWdodF9qb2luKG1lZHN0YXJfYXBzX21lcmdlZCwgYnkgPSAiY2FzZV9udW0iKSAlPiUgCiAgIyBQcmV2ZW50IGFzc2lnbmluZyBudW1iZXIgdG8gTkEKICBtdXRhdGUobmV3ID0gaWZfZWxzZShpcy5uYShjYXNlX251bSksIE5BX2ludGVnZXJfLCBuZXcpKSAlPiUKICBtdXRhdGUoY2FzZV9udW0gPSBuZXcpICU+JSAKICBzZWxlY3QoLW5ldykgJT4lIAogICMgVG8gZm9yY2UgY2FzZSBudW1iZXJzIHRvIHN0YXJ0IGF0IDEKICBtdXRhdGUoY2FzZV9udW0gPSBjYXNlX251bSAtIDEpCmBgYAoKCiMjIENyZXcgbWVtYmVyIGlkCgpgYGB7cn0KbWVkc3Rhcl9hcHNfbWVyZ2VkIDwtIG1lZHN0YXJfYXBzX21lcmdlZCAlPiUKICBzZWxlY3QoY3Jld19tZW1iZXJfaWQpICU+JSAKICB1bmlxdWUoKSAlPiUgCiAgbXV0YXRlKG5ldyA9IHJvd19udW1iZXIoKSkgJT4lIAogIHJpZ2h0X2pvaW4obWVkc3Rhcl9hcHNfbWVyZ2VkLCBieSA9ICJjcmV3X21lbWJlcl9pZCIpICU+JSAKICAjIFByZXZlbnQgYXNzaWduaW5nIG51bWJlciB0byBOQQogIG11dGF0ZShuZXcgPSBpZl9lbHNlKGlzLm5hKGNyZXdfbWVtYmVyX2lkKSwgTkFfaW50ZWdlcl8sIG5ldykpICU+JQogIG11dGF0ZShjcmV3X21lbWJlcl9pZCA9IG5ldykgJT4lIAogIHNlbGVjdCgtbmV3KQpgYGAKCgojIyBQZXJwIGlkCgpgYGB7cn0KbWVkc3Rhcl9hcHNfbWVyZ2VkIDwtIG1lZHN0YXJfYXBzX21lcmdlZCAlPiUKICBzZWxlY3QocGVycF9pZCkgJT4lIAogIHVuaXF1ZSgpICU+JSAKICBtdXRhdGUobmV3ID0gcm93X251bWJlcigpKSAlPiUgCiAgcmlnaHRfam9pbihtZWRzdGFyX2Fwc19tZXJnZWQsIGJ5ID0gInBlcnBfaWQiKSAlPiUgCiAgIyBQcmV2ZW50IGFzc2lnbmluZyBudW1iZXIgdG8gTkEKICBtdXRhdGUobmV3ID0gaWZfZWxzZShpcy5uYShwZXJwX2lkKSwgTkFfaW50ZWdlcl8sIG5ldykpICU+JQogIG11dGF0ZShwZXJwX2lkID0gbmV3KSAlPiUgCiAgc2VsZWN0KC1uZXcpICU+JSAKICAjIFRvIGZvcmNlIHBlcnAgaWRzIHRvIHN0YXJ0IGF0IDEKICBtdXRhdGUocGVycF9pZCA9IHBlcnBfaWQgLSAxKQpgYGAKCgojIyBSZW1vdmUgdGhlIGRheSBmcm9tIGFsbCByZW1haW5pbmcgZGF0ZSB2YXJpYWJsZXMKCkFzIHBhcnQgb2YgdGhlIHByb2Nlc3Mgb2YgcHJvdGVjdGluZyBwYXJ0aWNpcGFudCBhbm9ueW1pdHksIHdlIHdpbGwgcmVtb3ZlIHRoZSBkYXkgZnJvbSBhbGwgZGF0ZXMuCgpgYGB7cn0KbWVkc3Rhcl9hcHNfbWVyZ2VkIDwtIG1lZHN0YXJfYXBzX21lcmdlZCAlPiUgCiAgbXV0YXRlKAogICAgZGF0ZV9lbnRlcmVkID0gZm9ybWF0KGRhdGVfZW50ZXJlZCwgIiVZLSVtIiksCiAgICBpbnRha2Vfc3RhcnQgPSBmb3JtYXQoaW50YWtlX3N0YXJ0LCAiJVktJW0iKQogICkKYGBgCgoKIyMgUmVtb3ZlIHJlbWFpbmluZyBpZGVudGlmaWVycwoKYGBge3J9Cm1lZHN0YXJfYXBzX21lcmdlZCA8LSBtZWRzdGFyX2Fwc19tZXJnZWQgJT4lIAogIHNlbGVjdCgtZmlyc3RfbmFtZSwgLWxhc3RfbmFtZSwgLWJpcnRoX3llYXIsIC1iaXJ0aF9tbnRoLCAtYmlydGhfZGF5LCAtYWRkcmVzc19udW0sIAogICAgICAgICAtYWRkcmVzc19zdHJlZXQsIC1jaXR5LCAtemlwKQpgYGAKCmBgYHtyfQphYm91dF9kYXRhKG1lZHN0YXJfYXBzX21lcmdlZCkgIyA2NiwyMDAgb2JzZXJ2YXRpb25zIGFuZCA1MCB2YXJpYWJsZXMKYGBgCgoKIyMgUmVvcmRlciB2YXJpYWJsZXMKCmBgYHtyfQpjdXJyZW50X29yZGVyIDwtIHNldGRpZmYoCiAgY3VycmVudF9vcmRlciwgCiAgYygiZmlyc3RfbmFtZSIsICJsYXN0X25hbWUiLCAiYmlydGhfeWVhciIsICJiaXJ0aF9tbnRoIiwgImJpcnRoX2RheSIsCiAgICAiYWRkcmVzc19udW0iLCAiYWRkcmVzc19zdHJlZXQiLCAiY2l0eSIsICJ6aXAiKQopCmBgYAoKCmBgYHtyfQptZWRzdGFyX2Fwc19tZXJnZWQgPC0gbWVkc3Rhcl9hcHNfbWVyZ2VkICU+JQogIHNlbGVjdChjdXJyZW50X29yZGVyKQpgYGAKCmBgYHtyfQphYm91dF9kYXRhKG1lZHN0YXJfYXBzX21lcmdlZCkgIyA2NiwyMDAgb2JzZXJ2YXRpb25zIGFuZCA1MCB2YXJpYWJsZXMKYGBgCgoKIyMgQ2xlYW4gdXAKCmBgYHtyfQpybShjdXJyZW50X29yZGVyKQpgYGAKClt0b3BdKCN0b3ApCgoKCgoKCgoKCgojIFNhdmUgZGVpZGVudGlmaWVkIHZlcnNpb24gb2YgbWVyZ2VkIGRhdGFzZXQgeyNzYXZlfQoKYGBge3J9CmZlYXRoZXI6OndyaXRlX2ZlYXRoZXIoCiAgbWVkc3Rhcl9hcHNfbWVyZ2VkLCAKICAiLi4vZGF0YS9tZWRzdGFyX2Fwc19tZXJnZWQuZmVhdGhlciIKKQpgYGAKCmBgYHtyfQpyZWFkcjo6d3JpdGVfY3N2KAogIG1lZHN0YXJfYXBzX21lcmdlZCwgCiAgIi4uL2RhdGEvbWVkc3Rhcl9hcHNfbWVyZ2VkLmNzdiIKKQpgYGAKClt0b3BdKCN0b3ApCgoKCgoKCgoKCgojIENvdW50IHJvd3MsIHVuaXF1ZSByZXNwb25zZXMsIGFuZCB1bmlxdWUgcGVvcGxlIHsjY291bnRzfQoKYGBge3J9Cm1lZHN0YXJfYXBzX21lcmdlZCAlPiUgCiAgc3VtbWFyaXNlKAogICAgYFRvdGFsIFJvd3NgID0gbigpLAogICAgYFVuaXF1ZSBJbmNpZGVudHNgID0gdW5pcXVlKGluY2lkZW50X2NhbGxfbnVtYmVyKSAlPiUgbGVuZ3RoKCksCiAgICBgVW5pcXVlIFBDUmAgPSB1bmlxdWUoaW5jaWRlbnRfcGNyX251bWJlcikgJT4lIGxlbmd0aCgpLAogICAgYFVuaXF1ZSBDYXNlIE51bWJlcnNgID0gdW5pcXVlKGNhc2VfbnVtKSAlPiUgbGVuZ3RoKCksCiAgICBgVW5pcXVlIFBlb3BsZWAgPSB1bmlxdWUocGVyc29uX2lkKSAlPiUgbGVuZ3RoKCkKICApICU+JSAKICBtdXRhdGVfYWxsKGZvcm1hdCwgYmlnLm1hcmsgPSAiLCIpCmBgYAoKW3RvcF0oI3RvcCkKCgombmJzcDsKCi0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KCmBgYHtyIGVjaG89RkFMU0V9CnNlc3Npb25JbmZvKCkKYGBgCg==</div>
 
 
 
