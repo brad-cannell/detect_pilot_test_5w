@@ -463,14 +463,14 @@ rm(current_order)
 ```{r}
 feather::write_feather(
   medstar_aps_merged, 
-  "../data/medstar_aps_merged.feather"
+  "../data/detect_5wk.feather"
 )
 ```
 
 ```{r}
 readr::write_csv(
   medstar_aps_merged, 
-  "../data/medstar_aps_merged.csv"
+  "../data/detect_5wk.csv"
 )
 ```
 
