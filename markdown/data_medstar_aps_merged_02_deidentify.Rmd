@@ -14,6 +14,7 @@ output:
 * [Deidentify the response numbers for the MedStar legal compliance department](#deidentify-1)   
 * [Deidentify the merged dataset](#deidentify-2)    
 * [Save deidentified version of merged dataset](#save)   
+* [Create new study id](#new-id)   
 * [Count rows, unique responses, and unique people](#counts)   
 
 
@@ -458,19 +459,76 @@ rm(current_order)
 
 
 
+# Create new study id {#new-id}
+
+In the merged data there are incidents where people were treated by MedStar -- producing an incident pcr number -- but were not investigated by APS.
+
+Additionally, there are investigations that were conducted by APS -- producing a case number -- but were not screened by MedStar.
+
+Therefore, neither incident pcr number nor case number can be used to subset the data to one row per incident/case.
+
+I want to create a new id that can be used for that purpose.
+
+## Data check
+
+```{r}
+medstar_aps_merged <- medstar_aps_merged %>% 
+  mutate(pcr_case = paste(incident_pcr_number, case_num, sep = "_"))
+```
+
+```{r}
+medstar_aps_merged %>% 
+  filter(pcr_case == "NA_NA")
+```
+
+Every analysis unit has either an incident pcr number or a case number.
+
+## Create study id
+
+```{r}
+medstar_aps_merged <- medstar_aps_merged %>% 
+  left_join(
+    medstar_aps_merged %>% 
+      group_by(pcr_case) %>% 
+      filter(row_number() == 1) %>% 
+      ungroup() %>% 
+      mutate(id = row_number()) %>% 
+      select(pcr_case, id),
+    by = "pcr_case"
+  ) %>% 
+  select(id, everything()) %>% 
+  select(-pcr_case)
+```
+
+```{r}
+about_data(medstar_aps_merged) # 66,200 observations and 51 variables
+```
+
+
+[top](#top) 
+
+
+
+
+
+
+
+
+
+
 # Save deidentified version of merged dataset {#save}
 
 ```{r}
 feather::write_feather(
   medstar_aps_merged, 
-  "../data/detect_5wk.feather"
+  "../data/detect_5wk_1.feather"
 )
 ```
 
 ```{r}
 readr::write_csv(
   medstar_aps_merged, 
-  "../data/detect_5wk.csv"
+  "../data/detect_5wk_1.csv"
 )
 ```
 
@@ -491,6 +549,7 @@ readr::write_csv(
 medstar_aps_merged %>% 
   summarise(
     `Total Rows` = n(),
+    `Study IDs` = unique(id) %>% length(),
     `Unique Incidents` = unique(incident_call_number) %>% length(),
     `Unique PCR` = unique(incident_pcr_number) %>% length(),
     `Unique Case Numbers` = unique(case_num) %>% length(),

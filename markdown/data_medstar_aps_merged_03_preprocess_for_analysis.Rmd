@@ -31,11 +31,11 @@ library(bfuncs)
 ```
 
 ```{r}
-detect_5wk <- feather::read_feather("../data/detect_5wk.feather")
+detect_5wk_1 <- feather::read_feather("../data/detect_5wk_1.feather")
 ```
 
 ```{r}
-about_data(detect_5wk) # 66,200 observations and 50 variables
+about_data(detect_5wk_1) # 66,200 observations and 51 variables
 ```
 
 
@@ -64,8 +64,8 @@ Create new outcome variable (any_valid) that is equal to 1 when any type of abus
   + If one disposition is other, and the rest are invalid, then any valid equals NA
   
 ```{r}
-detect_5wk <- detect_5wk %>%
-  group_by(incident_pcr_number) %>% 
+detect_5wk_1 <- detect_5wk_1 %>%
+  group_by(id) %>% 
   mutate(
     any_valid = case_when(
       any(disposition == "Valid")   ~ 1L,
@@ -76,8 +76,16 @@ detect_5wk <- detect_5wk %>%
   ungroup()
 ```
 
+## Data check
+
 ```{r}
-about_data(detect_5wk) # 66,200 observations and 51 variables
+detect_5wk_1 %>% 
+  select(id, incident_pcr_number, case_num, disposition, any_valid) %>% 
+  distinct()
+```
+
+```{r}
+about_data(detect_5wk_1) # 66,200 observations and 52 variables
 ```
 
 
@@ -88,22 +96,22 @@ about_data(detect_5wk) # 66,200 observations and 51 variables
 * We will also recode "Don’t Know" to NA.
 
 ```{r}
-detect_5wk <- detect_5wk %>% 
+detect_5wk_1 <- detect_5wk_1 %>% 
   map_at(
     .x  = .,
-    .at = select(detect_5wk, unusual_odor36:adls61) %>% names(),
+    .at = select(detect_5wk_1, unusual_odor36:adls61) %>% names(),
     .f  = fct_recode, NULL = "Not applicable or No Caregiver"
   ) %>% 
   map_at(
     .x  = .,
-    .at = select(detect_5wk, unusual_odor36:adls61) %>% names(),
+    .at = select(detect_5wk_1, unusual_odor36:adls61) %>% names(),
     .f  = fct_recode, NULL = "Don’t Know"
   ) %>% 
   as_tibble()
 ```
 
 ```{r}
-about_data(detect_5wk) # 66,200 observations and 51 variables
+about_data(detect_5wk_1) # 66,200 observations and 52 variables
 ```
 
 [top](#top)
@@ -120,7 +128,7 @@ about_data(detect_5wk) # 66,200 observations and 51 variables
 # Save preprocessed data {#save}
 
 ```{r}
-feather::write_feather(detect_5wk, "../data/detect_5wk.feather")
+feather::write_feather(detect_5wk_1, "../data/detect_5wk_2.feather")
 ```
 
 [top](#top)
