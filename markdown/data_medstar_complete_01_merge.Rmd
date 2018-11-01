@@ -129,6 +129,20 @@ medstar_complete <- medstar_health %>%
 about_data(medstar_complete) # 99,309 observations and 60 variables
 ```
 
+
+## Change detect_data variable from NA to 0
+
+For all rows that come from the MedStar demographics and health data
+
+```{r}
+medstar_complete <- medstar_complete %>% 
+  mutate(detect_data = if_else(is.na(detect_data), 0, detect_data))
+```
+
+```{r}
+about_data(medstar_complete) # 99,309 observations and 60 variables
+```
+
 [top](#top)
 
 
