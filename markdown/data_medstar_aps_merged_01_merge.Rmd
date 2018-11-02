@@ -11,6 +11,7 @@ output:
 * [Overview](#overview)   
 * [Load packages and data](#load)   
 * [Create helper functions](#helper-functions)   
+* [Separate MedStar data by presence of DETECT screening data](#separate)   
 * [Prepare MedStar data for record matching](#prep-medstar)    
 * [Prepare APS data for record matching](#prep-aps)    
 * [Determine which rows are likely to be matches](#find-matches)     
@@ -22,6 +23,7 @@ output:
 * [Data check: Spot check merged values match values from original data](#data-check-join-conflicts)   
 * [Check incident call numbers reported to MedStar compliance](#check-response)     
 * [Merge with other APS data](#merge-aps)      
+* [Append unscreened MedStar data](#append)   
 * [Save merged data](#save)   
 
 
@@ -371,6 +373,45 @@ final_check <- function(merged, original) {
 
 
 
+# Separate MedStar data by presence of DETECT screening data {#separate}
+
+We cannot merge the complete MedStar data (including rows from the demographics and health data) with the APS data because the demographics and health data does not include date of birth. 
+
+We considered matching records using name and age, but felt like that presented risk of false positive matches. We also considered using name, age, and address. But, everyone that is missing date of birth is also missing address.
+
+Therefore, we are going to separate the MedStar complete data back into two datasets: Rows with a DETECT screening and those without.
+
+Below we will we will merge the MedStar data that included DETECT screenings with the APS data.
+
+Later, we will append the MedStar data that does include DETECT screenings back to the merged MedStar/APS data
+
+```{r}
+screenings <- medstar_complete %>% filter(detect_data == 1)
+```
+
+```{r}
+about_data(screenings) # 64,059 observations and 57 variables
+```
+
+```{r}
+no_screenings <- medstar_complete %>% filter(detect_data == 0)
+```
+
+```{r}
+about_data(no_screenings) # 35,250 observations and 57 variables
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
 # Prepare MedStar data for record matching {#prep-medstar}
 
 The MedStar data currently has multiple rows for each screening (incident pcr number). This is redundant for the purpose of merging records and slows down RecordLinkage considerably. So, here we are going to reduce the MedStar data to one row for each incident pcr number by nesting all other variables.
@@ -378,10 +419,7 @@ The MedStar data currently has multiple rows for each screening (incident pcr nu
 We are also ONLY going to attempt to pair rows where there is a completed DETECT screening. This this link for an explanation: https://github.com/brad-cannell/detect_pilot_test/issues/17.
 
 ```{r}
-medstar_nested <- medstar_complete %>% 
-  
-  # Only keep rows that correspond to a DETECT screening
-  filter(detect_data == 1) %>% 
+medstar_nested <- screenings %>% 
   
   # Separate DOB into its component parts
   mutate(
@@ -769,7 +807,7 @@ non_joined <- medstar_aps_merged %>%
 ```
 
 
-## Spot check random 10%
+## Check matches
 
 To make sure that the names and birth dates actually appear to match (results hidden to protect privacy)
 
@@ -1575,6 +1613,37 @@ length(unique(medstar_aps_merged$incident_pcr_number)) # 1,248
 
 ```{r}
 length(unique(medstar_aps_merged$case_num)) # 680
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Append unscreened MedStar data {#append}
+
+Above we separated the MedStar data with DETECT screenings from the MedStar data without DETECT screenings. We then joined the MedStar data with DETECT screenings to matching investigations from APS. Here we append the MedStar data from people that did not recieve a DETECT screening to the merged MedStar/APS data.
+
+```{r}
+medstar_aps_merged <- medstar_aps_merged
+```
+
+```{r}
+medstar_aps_merged <- medstar_aps_merged %>% 
+  bind_rows(
+    no_screenings %>% 
+      mutate(age = as.character(age))
+  )
+```
+
+```{r}
+about_data(medstar_aps_merged) # 101,450 observations and 64 variables
 ```
 
 [top](#top)
