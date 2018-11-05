@@ -1631,10 +1631,6 @@ length(unique(medstar_aps_merged$case_num)) # 680
 Above we separated the MedStar data with DETECT screenings from the MedStar data without DETECT screenings. We then joined the MedStar data with DETECT screenings to matching investigations from APS. Here we append the MedStar data from people that did not recieve a DETECT screening to the merged MedStar/APS data.
 
 ```{r}
-medstar_aps_merged <- medstar_aps_merged
-```
-
-```{r}
 medstar_aps_merged <- medstar_aps_merged %>% 
   bind_rows(
     no_screenings %>% 
@@ -1644,6 +1640,13 @@ medstar_aps_merged <- medstar_aps_merged %>%
 
 ```{r}
 about_data(medstar_aps_merged) # 101,450 observations and 64 variables
+```
+
+Set detect_data to 0 for the APS rows we just added that aren't associated with a DETECT screening
+
+```{r}
+medstar_aps_merged <- medstar_aps_merged %>% 
+  mutate(detect_data = if_else(is.na(detect_data), 0, detect_data))
 ```
 
 [top](#top)
