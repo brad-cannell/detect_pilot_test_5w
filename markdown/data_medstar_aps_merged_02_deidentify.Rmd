@@ -33,7 +33,6 @@ Sys.setenv(TZ = "US/Central")
 ```{r message=FALSE}
 library(tidyverse)
 library(bfuncs)
-library(fastLink)
 ```
 
 Merged MedStar and APS data. Created in data_medstar_aps_merged_01_merge.Rmd
@@ -43,7 +42,7 @@ medstar_aps_merged <- feather::read_feather("/Volumes/Detect/medstar_aps_merged.
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 66,200 observations and 57 variables
+about_data(medstar_aps_merged) # 101,450 observations and 64 variables
 ```
 
 
@@ -80,7 +79,7 @@ Instead, we can use fastLink to search for names and DOB's that are likely to be
 
 If we do this on the entire dataset at once, it is a costly process. It becomes much more tractable if we temporarily reduce the data to one row for each combination of values that we want to investigate. In this case, we want to investigate all unique combinations of name, DOB, and address.
 
-## Coerce selected variables to numeric
+## Setup
 
 ```{r}
 medstar_aps_merged <- medstar_aps_merged %>% 
@@ -98,107 +97,219 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 66,200 observations and 58 variables
+about_data(medstar_aps_merged) # 101,450 observations and 65 variables
+```
+
+```{r}
+vars_for_matching <- medstar_aps_merged %>% 
+  select(first_name, last_name, starts_with("birth"), address_street) %>% 
+  names()
+```
+
+```{r}
+vars_to_exclude <- medstar_aps_merged %>% 
+  select(-vars_for_matching) %>% 
+  names()
 ```
 
 
+## Keep screened only for matching
+
 ```{r}
-temp <- medstar_aps_merged %>% 
+df_screened_only <- medstar_aps_merged %>% filter(detect_data == 1)
+```
+
+```{r}
+about_data(df_screened_only) # 64,981 observations and 65 variables
+```
+
+```{r}
+temp <- df_screened_only %>% 
   # Keep one row for every combination of first name, last name, dob, and address
-  # Can't use pcr because not everybody has one
   group_by(group) %>% 
   filter(row_number() == 1) %>% 
   ungroup()
 ```
 
-```{r}
-about_data(temp) # 1,755 observations and 58 variables
-```
+
+# Find matches
 
 ```{r}
-fastlink_out <- fastLink(
-  dfA = temp,
-  dfB = temp,
-  varnames = c("first_name", "last_name", "birth_year", "birth_mnth", "birth_day", "address_street"),
-  dedupe.matches = FALSE
+rpairs_jar <- RecordLinkage::compare.linkage(
+  dataset1 = temp, 
+  dataset2 = temp,
+  strcmp  = c("first_name", "last_name", "address_street"),
+  exclude = vars_to_exclude
 )
 ```
 
 ```{r}
-fastlink_matches <- tibble(
-  row     = fastlink_out$matches$inds.b,
-  matches = fastlink_out$matches$inds.a
-)
+rpairs_epiwt <- RecordLinkage::epiWeights(rpairs_jar)
 ```
 
 ```{r}
-person_key <- fastlink_matches %>%
-  
-  # Get the matches into the form that I need for joining back to the data
+weighted_pairs <- RecordLinkage::getPairs(rpairs_epiwt, max.weight = Inf, min.weight = 0.5)
+```
+
+```{r}
+weighted_pairs <- weighted_pairs %>% 
+  filter(id != "") %>% 
+  mutate(
+    row = id %>% as.character() %>% as.integer(),
+    pair_num = rep(seq(nrow(.) / 2), each = 2),
+    Weight = if_else(
+      Weight == "", 
+      lead(Weight), 
+      Weight) %>% 
+      as.character() %>% 
+      as.numeric() %>% 
+      round(6)
+  ) %>% 
+  select(Weight, row, pair_num, everything(), -id)
+```
+
+
+## Find cut point
+
+Results hidden to protect privacy
+
+```{r eval=FALSE}
+weighted_pairs %>% 
+  filter(Weight < 0.8) %>% 
+  select(Weight, row, pair_num, ends_with("name"), starts_with("birth"), starts_with("address"))
+```
+
+```{r}
+max_weight <- 0.7693280 - .0001 # Because threshold below is not inclusive
+```
+
+```{r}
+weighted_pairs <- weighted_pairs %>% filter(Weight >= max_weight)
+```
+
+```{r}
+check <- weighted_pairs %>%
+  select(row) %>% 
+  mutate(matches = lead(row)) %>%    # Display horizontally instead of vertically
+  filter(row_number() %% 2 == 1) %>% # Drop every other row
+  arrange(row) %>% 
   group_by(row) %>% 
-  mutate(matches = list(matches)) %>% # Create list column
+  mutate(matches = list(matches)) %>% # Nest all matches for each row
   ungroup() %>% 
-  mutate(matches = purrr::map_chr(matches, ~ paste(., collapse = ","))) %>% # Turn list into character string
+  mutate(matches = purrr::map_chr(
+    matches, 
+    function(x) {
+      x = sort(x) # 1,2,3 is the same as 3,2,1
+      x = paste(x, collapse = ",") # Convert list to character string
+      x
+    })
+  ) %>% 
   select(matches) %>% 
   distinct() %>% # Reduce to 1 row per group of matches
   mutate(
     person_id = row_number(),
-    row = purrr::map(matches, ~ scan(text = ., what = 0L, sep = ",", quiet = TRUE)) # Turn back into list
+    row = purrr::map( # Turn back into list
+      matches, 
+      ~ scan(text = ., what = 0L, sep = ",", quiet = TRUE)
+    ) 
   ) %>% 
   unnest() %>% 
   select(person_id, row) %>% 
-  
-  # Join to temp
   right_join(
     temp %>% 
       mutate(row = row_number()),
     by = "row"
-  ) %>% 
-  select(person_id, group)
+  )
 ```
-
 
 ## Data check
 
-Add person id to the full dataset
+How many rows and how many unique ids?
 
 ```{r}
-data_check <- medstar_aps_merged %>% 
-  left_join(person_key, by = "group")
+nrow(check) # 1,142
 ```
 
-Manually inspect rows with different values that were considered the same person. Look instances when this appears to have been done inappropriately (results hidden to protect privacy).
+```{r}
+length(unique(check$person_id)) # 1,126
+```
+
+So, there are instances when two different rows (by definition that have different values for first name, last, DOB, and/or address because we used distinct above) have the same person id.
+
+Let's view those and make sure the look appropriate (results hidden to protect privacy)
 
 ```{r eval=FALSE}
-data_check %>% 
-  group_by(person_id, first_name, last_name, birth_year, birth_mnth, birth_day, address_street) %>% 
-  filter(row_number() == 1) %>% 
-  arrange(person_id) %>% 
-  select(person_id, everything()) %>% 
+check %>% 
   group_by(person_id) %>% 
-  filter(max(row_number()) > 1)
+  filter(max(row_number()) > 1) %>% 
+  arrange(person_id)
 ```
 
-The process appears to have worked as expected.
+Those all look appropriate
+
+Now let's look for cases where people weren't matched, but should have been (results hidden to protect privacy) 
+
+```{r eval=FALSE}
+# Same name, but different id
+check %>%
+  mutate(check = paste(first_name, last_name, sep = "_")) %>% 
+  group_by(check) %>% 
+  filter(max(row_number()) > 1) %>% 
+  arrange(check)
+```
+
+So, when you look through those there are some good examples of people with the same name being correctly classified as matches, and people with the same name being correctly classified as non-matches. As long, as there isn't missing data, this appears to work really well.
 
 
-## Add person id to the full dataset
+## Adding person id to the data
 
 ```{r}
-medstar_aps_merged <- medstar_aps_merged %>% 
-  left_join(person_key, by = "group") %>% 
+df_screened_only <- check %>%
+  select(person_id, group) %>% 
+  right_join(df_screened_only, by = "group") %>% 
   select(-group)
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 66,200 observations and 58 variables
+length(unique(df_screened_only$person_id)) # 1,126 matches above
+```
+
+```{r}
+about_data(df_screened_only) # 64,981 observations and 65 variables
+```
+
+
+## Add non-screened back in
+
+```{r}
+medstar_aps_merged <- df_screened_only %>%
+  bind_rows(medstar_aps_merged %>% filter(detect_data == 0)) %>% 
+  select(-group)
+```
+
+At this point, a unique person id (that I feel confident about) exists for every pcr where a screening was conducted.
+
+Rows in the data that aren't associated with a pcr where a screening was conducted don't have a person id. Unfortunately, there isn't anything we can do about it. Without DOB and/or address in these rows, we can't reliably identify unique people. 
+
+The good news is that our interest is really in relationships at the event level as opposed to the person level. For the most part, our inability to accurately identify unique people in the non-DETECT data shouldn't matter much.
+
+## Count of unique people
+
+```{r}
+medstar_aps_merged %>% 
+  summarise(
+    `Unique People` = unique(person_id) %>% 
+      length() %>% 
+      format(big.mark = ",")
+  ) # 1,127
 ```
 
 
 ## Clean up
 
 ```{r}
-rm(data_check, fastlink_matches, fastlink_out, person_key, temp)
+rm(check, df_screened_only, rpairs_epiwt, rpairs_jar, temp, weighted_pairs, max_weight,
+   vars_for_matching, vars_to_exclude)
 ```
 
 [top](#top)
@@ -232,14 +343,14 @@ response_ids %>%
               group_by(incident_pcr_number) %>% 
               filter(row_number() == 1), 
             by = c("response_num" = "incident_call_number")) %>%  
-  unique() # 6 incident pcr numbers
+  unique() # 5 incident pcr numbers
 ```
 
-There are 6 responses id's in the MedStar compliance data that don't appear in the MedStar DETECT screening items data (results hidden to protect participant privacy). 
+There are 5 responses id's in the MedStar compliance data that don't appear in the merged MedStar/APS data (results hidden to protect participant privacy). 
 
 I have an email from MedStar from 2016-10-10 outlining the discrepancy. One response id had all nulls for the DETECT screening items (...147). One response id could not be found in the query. The rest were ineligible for the DETECT screening tool because of age.
 
-At this point, there should be 8 response id's from the compliance data that have a match in the merged MedStar/APS data (results hidden to protect participant privacy).
+At this point, there should be 9 response id's from the compliance data that have a match in the merged MedStar/APS data (results hidden to protect participant privacy).
 
 ```{r eval=FALSE}
 response_ids %>% 
@@ -247,7 +358,7 @@ response_ids %>%
               group_by(incident_pcr_number) %>% 
               filter(row_number() == 1), 
             by = c("response_num" = "incident_call_number")) %>% 
-  unique() # 8 incident pcr numbers
+  unique() # 9 incident pcr numbers
 ```
 
 Now we need a way to track these cases going forward without using a number that has meaning in MedStar's database.
@@ -271,13 +382,13 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 66,200 observations and 59 variables
+about_data(medstar_aps_merged) # 101,450 observations and 66 variables
 ```
 
 
 ## Data check
 
-At this point, there should be 8 response id's from the compliance data that have a match in the merged MedStar/APS data (results hidden to protect participant privacy).
+At this point, there should be 9 response id's from the compliance data that have a match in the merged MedStar/APS data (results hidden to protect participant privacy).
 
 ```{r eval=FALSE}
 medstar_aps_merged %>% 
@@ -413,11 +524,12 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ```{r}
 medstar_aps_merged <- medstar_aps_merged %>% 
   select(-first_name, -last_name, -birth_year, -birth_mnth, -birth_day, -address_num, 
-         -address_street, -city, -zip)
+         -address_street, -city, -zip, -first_name_02, -response_date, -aps_report_num,
+         -full_name, -address, -state, -dob)
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 66,200 observations and 50 variables
+about_data(medstar_aps_merged) # 101,450 observations and 50 variables
 ```
 
 
@@ -427,7 +539,8 @@ about_data(medstar_aps_merged) # 66,200 observations and 50 variables
 current_order <- setdiff(
   current_order, 
   c("first_name", "last_name", "birth_year", "birth_mnth", "birth_day",
-    "address_num", "address_street", "city", "zip")
+    "address_num", "address_street", "city", "zip", "first_name_02", 
+    "response_date", "aps_report_num", "full_name", "address", "state", "dob")
 )
 ```
 
@@ -438,7 +551,7 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 66,200 observations and 50 variables
+about_data(medstar_aps_merged) # 101,450 observations and 50 variables
 ```
 
 
@@ -501,7 +614,7 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 66,200 observations and 51 variables
+about_data(medstar_aps_merged) # 101,450 observations and 51 variables
 ```
 
 
@@ -545,15 +658,17 @@ readr::write_csv(
 
 # Count rows, unique responses, and unique people {#counts}
 
+Not including missing
+
 ```{r}
 medstar_aps_merged %>% 
   summarise(
     `Total Rows` = n(),
-    `Study IDs` = unique(id) %>% length(),
-    `Unique Incidents` = unique(incident_call_number) %>% length(),
-    `Unique PCR` = unique(incident_pcr_number) %>% length(),
-    `Unique Case Numbers` = unique(case_num) %>% length(),
-    `Unique People` = unique(person_id) %>% length()
+    `Study IDs` = id %>% unique() %>% is.na() %>% `!` %>% sum(),
+    `Unique Incidents` = incident_call_number %>% unique() %>% is.na() %>% `!` %>% sum(),
+    `Unique PCR` = incident_pcr_number %>% unique() %>% is.na() %>% `!` %>% sum(),
+    `Unique Case Numbers` = case_num %>% unique() %>% is.na() %>% `!` %>% sum(),
+    `Unique People` = person_id %>% unique() %>% is.na() %>% `!` %>% sum()
   ) %>% 
   mutate_all(format, big.mark = ",")
 ```
