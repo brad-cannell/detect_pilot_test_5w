@@ -132,11 +132,17 @@ detect_5wk_2 <- bind_cols(
     select(ends_with("yes")) %>% 
     mutate(
       yes_count = rowSums(.), # Count 1's within row across columns
-      any_yes   = if_else(yes_count > 0, 1L, 0L),
-      any_yes_f = factor(any_yes, labels = c("No", "Yes"))
-    )
+      yes_any   = if_else(yes_count > 0, 1L, 0L),
+      yes_any_f = factor(yes_any, labels = c("No", "Yes"))
+    ) %>% 
+    select(-ends_with("yes"))
 )
 ```
+
+```{r}
+about_data(detect_5wk_2) # 101,450 observations and 55 variables
+```
+
 
 [top](#top)
 
