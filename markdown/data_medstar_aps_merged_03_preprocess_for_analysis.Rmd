@@ -64,7 +64,7 @@ Create new outcome variable (any_valid) that is equal to 1 when any type of abus
   + If one disposition is other, and the rest are invalid, then any valid equals NA
   
 ```{r}
-detect_5wk_1 <- detect_5wk_1 %>%
+detect_5wk_2 <- detect_5wk_1 %>%
   group_by(id) %>% 
   mutate(
     any_valid = case_when(
@@ -79,13 +79,13 @@ detect_5wk_1 <- detect_5wk_1 %>%
 ## Data check
 
 ```{r}
-detect_5wk_1 %>% 
+detect_5wk_2 %>% 
   select(id, incident_pcr_number, case_num, disposition, any_valid) %>% 
   distinct()
 ```
 
 ```{r}
-about_data(detect_5wk_1) # 101,450 observations and 52 variables
+about_data(detect_5wk_2) # 101,450 observations and 52 variables
 ```
 
 
@@ -96,7 +96,7 @@ about_data(detect_5wk_1) # 101,450 observations and 52 variables
 * We will also recode "Don’t Know" to NA.
 
 ```{r}
-detect_5wk_1 <- detect_5wk_1 %>% 
+detect_5wk_2 <- detect_5wk_2 %>% 
   map_at(
     .x  = .,
     .at = select(detect_5wk_1, unusual_odor36:adls61) %>% names(),
@@ -111,7 +111,31 @@ detect_5wk_1 <- detect_5wk_1 %>%
 ```
 
 ```{r}
-about_data(detect_5wk_1) # 101,450 observations and 52 variables
+about_data(detect_5wk_2) # 101,450 observations and 52 variables
+```
+
+
+## Create any positive variable
+
+Create a variable that is equal to 1 if any DETECT item was positive and equal to 0 if all screening items used were negative.
+
+```{r}
+detect_5wk_2 <- bind_cols(
+  detect_5wk_2,
+  detect_5wk_2 %>% 
+    select(unusual_odor36:adls61) %>% 
+    mutate_all(
+      funs(
+        yes = case_when(. == "Yes" ~ 1L, TRUE ~ 0L) # 1 if Yes, 0 if anything else - including NA
+      )
+    ) %>% 
+    select(ends_with("yes")) %>% 
+    mutate(
+      yes_count = rowSums(.), # Count 1's within row across columns
+      any_yes   = if_else(yes_count > 0, 1L, 0L),
+      any_yes_f = factor(any_yes, labels = c("No", "Yes"))
+    )
+)
 ```
 
 [top](#top)
@@ -128,7 +152,7 @@ about_data(detect_5wk_1) # 101,450 observations and 52 variables
 # Save preprocessed data {#save}
 
 ```{r}
-feather::write_feather(detect_5wk_1, "../data/detect_5wk_2.feather")
+feather::write_feather(detect_5wk_2, "../data/detect_5wk_2.feather")
 ```
 
 [top](#top)
