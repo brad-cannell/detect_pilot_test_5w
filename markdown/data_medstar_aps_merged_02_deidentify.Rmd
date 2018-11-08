@@ -12,6 +12,7 @@ output:
 * [Load packages and data](#load)   
 * [Create an anonymous unique person id number](#person-id)   
 * [Deidentify the response numbers for the MedStar legal compliance department](#deidentify-1)   
+* [Managing dates](#managing-dates)   
 * [Deidentify the merged dataset](#deidentify-2)    
 * [Save deidentified version of merged dataset](#save)   
 * [Create new study id](#new-id)   
@@ -415,6 +416,68 @@ rm(in_compliance_data, response_ids)
 
 
 
+# Managing dates {#managing-dates}
+
+## Drop rows from 2015-10-27
+
+There were no screenings done after 2015-10-26. Response data from 2015-10-27 needs to be filtered out.
+
+```{r}
+medstar_aps_merged <- medstar_aps_merged %>%
+  filter(
+    # Keep if it's MedStar incident from 2015-10-26 and earlier
+    (!is.na(incident_pcr_number) & as.Date(date_entered) < "2015-10-27") |  
+    # OR if it's an APS investigation that wasn't matched with a MedStar record
+    (is.na(incident_pcr_number) & is.na(date_entered))
+  )
+```
+
+```{r}
+about_data(medstar_aps_merged) # 98,968 observations and 66 variables
+```
+
+
+## Create validation rule variable
+
+Create a dummy variable that indicates if the validation rule was implemented or not. It has to be done here because we erase the days from dates below.
+
+```{r}
+medstar_aps_merged <- medstar_aps_merged %>%
+  mutate(validation = if_else(as.Date(date_entered) < "2015-09-28", 0, 1))
+```
+
+```{r}
+about_data(medstar_aps_merged) # 98,968 observations and 67 variables
+```
+
+
+## Remove the day from all remaining date variables
+
+As part of the process of protecting participant anonymity, we will remove the day from all dates.
+
+```{r}
+medstar_aps_merged <- medstar_aps_merged %>% 
+  mutate(
+    date_entered = format(date_entered, "%Y-%m"),
+    intake_start = format(intake_start, "%Y-%m")
+  )
+```
+
+```{r}
+about_data(medstar_aps_merged) # 98,968 observations and 67 variables
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
 # Deidentify the merged dataset {#deidentify-2}
 
 We need to create deidentified datasets for [NACJD](https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html).
@@ -460,7 +523,7 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ## Case numbers
 
 ```{r}
-medstar_aps_merged <- medstar_aps_merged %>% 
+medstar_aps_merged <- medstar_aps_merged %>%
   select(case_num) %>% 
   unique() %>% 
   mutate(new = row_number()) %>% 
@@ -506,19 +569,6 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ```
 
 
-## Remove the day from all remaining date variables
-
-As part of the process of protecting participant anonymity, we will remove the day from all dates.
-
-```{r}
-medstar_aps_merged <- medstar_aps_merged %>% 
-  mutate(
-    date_entered = format(date_entered, "%Y-%m"),
-    intake_start = format(intake_start, "%Y-%m")
-  )
-```
-
-
 ## Remove remaining identifiers
 
 ```{r}
@@ -529,7 +579,7 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 101,450 observations and 50 variables
+about_data(medstar_aps_merged) # 98,968 observations and 51 variables
 ```
 
 
@@ -551,7 +601,7 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 101,450 observations and 50 variables
+about_data(medstar_aps_merged) # 98,968 observations and 51 variables
 ```
 
 
@@ -614,7 +664,7 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 101,450 observations and 51 variables
+about_data(medstar_aps_merged) # 98,968 observations and 52 variables
 ```
 
 
@@ -663,12 +713,12 @@ Not including missing
 ```{r}
 medstar_aps_merged %>% 
   summarise(
-    `Total Rows` = n(),
-    `Study IDs` = id %>% unique() %>% is.na() %>% `!` %>% sum(),
-    `Unique Incidents` = incident_call_number %>% unique() %>% is.na() %>% `!` %>% sum(),
-    `Unique PCR` = incident_pcr_number %>% unique() %>% is.na() %>% `!` %>% sum(),
-    `Unique Case Numbers` = case_num %>% unique() %>% is.na() %>% `!` %>% sum(),
-    `Unique People` = person_id %>% unique() %>% is.na() %>% `!` %>% sum()
+    `Total Rows` = n(), # 98,968
+    `Study IDs` = id %>% unique() %>% is.na() %>% `!` %>% sum(), # 2,611
+    `Unique Incidents` = incident_call_number %>% unique() %>% is.na() %>% `!` %>% sum(), # 1,964
+    `Unique PCR` = incident_pcr_number %>% unique() %>% is.na() %>% `!` %>% sum(), # 1,967
+    `Unique Case Numbers` = case_num %>% unique() %>% is.na() %>% `!` %>% sum(), # 679
+    `Unique People` = person_id %>% unique() %>% is.na() %>% `!` %>% sum() # 1,126
   ) %>% 
   mutate_all(format, big.mark = ",")
 ```

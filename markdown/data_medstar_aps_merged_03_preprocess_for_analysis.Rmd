@@ -35,7 +35,7 @@ detect_5wk_1 <- feather::read_feather("../data/detect_5wk_1.feather")
 ```
 
 ```{r}
-about_data(detect_5wk_1) # 101,450 observations and 51 variables
+about_data(detect_5wk_1) # 98,968 observations and 52 variables
 ```
 
 
@@ -85,7 +85,7 @@ detect_5wk_2 %>%
 ```
 
 ```{r}
-about_data(detect_5wk_2) # 101,450 observations and 52 variables
+about_data(detect_5wk_2) # 98,968 observations and 53 variables
 ```
 
 
@@ -111,7 +111,7 @@ detect_5wk_2 <- detect_5wk_2 %>%
 ```
 
 ```{r}
-about_data(detect_5wk_2) # 101,450 observations and 52 variables
+about_data(detect_5wk_2) # 98,968 observations and 53 variables
 ```
 
 
@@ -140,9 +140,8 @@ detect_5wk_2 <- bind_cols(
 ```
 
 ```{r}
-about_data(detect_5wk_2) # 101,450 observations and 55 variables
+about_data(detect_5wk_2) # 98,968 observations and 56 variables
 ```
-
 
 [top](#top)
 
