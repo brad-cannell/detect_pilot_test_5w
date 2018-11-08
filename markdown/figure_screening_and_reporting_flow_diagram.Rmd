@@ -1,0 +1,344 @@
+---
+title: "Screening and Reporting Flow Diagram"
+date: "Created: 2018-11-01 <br> Updated: `r Sys.Date()`"
+output: 
+  html_notebook:
+    css: custom-css.css
+---
+
+# Table of contents
+
+* [Overview](#overview)   
+* [Calculate numbers of screenings and reports](#calculations)   
+* [Create flow chart](#create)   
+
+
+# Overview
+
+Create a flow chart that graphically illustrates the steps in the screening and reporting process during the 5-week pilot study.
+
+Doing this as a Notebook right now. We can change it to another output format later if we need to.
+
+Helpful website: https://www.stat.auckland.ac.nz/~paul/R/Diagram/diagram.pdf
+
+
+# Load packages and data
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+Sys.setenv(TZ = "US/Central")
+```
+
+```{r message=FALSE}
+library(tidyverse)
+library(bfuncs)
+library(DiagrammeR)
+library(grid)
+library(Gmisc)
+```
+
+
+## Deidentified 5-week pilot data
+
+Created in data_medstar_aps_merged_03_preprocess_for_analysis.Rmd
+
+```{r}
+detect_5wk <- feather::read_feather("../data/detect_5wk.feather")
+```
+
+```{r}
+about_data(detect_5wk) # 98,968 observations and 56 variables
+```
+
+
+
+
+
+
+
+
+
+
+# Calculate numbers of screenings and reports {#calculations}
+
+Calculated measures to include in the diagram boxes along with descriptive text.
+
+## Reduce data to 1 row per pcr
+
+```{r}
+detect_1id <- detect_5wk %>% 
+  group_by(id) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup()
+```
+
+```{r}
+about_data(detect_1id) # 2,611 observations and 56 variables
+```
+
+
+## Eligibility
+
+Number of MedStar incident PCRs for a person who was 65 years old or older, treated in their residence, and treated during the 5-week DETECT pilot study (2015-09-17 -- 2015-10-26).
+
+Only rows that correspond to a MedStar response (as opposed to a APS investigation that wasn't paired with a response) should be count as eligible.
+
+```{r}
+eligible   <- detect_1id %>% filter(!is.na(incident_pcr_number))
+n_eligible <- nrow(eligible) %>% format(big.mark = ",") # 1,967
+```
+
+```{r}
+ineligible   <- detect_1id %>% filter(is.na(incident_pcr_number))
+n_ineligible <- nrow(ineligible) %>% format(big.mark = ",") # 644
+```
+
+```{r}
+rm(ineligible)
+```
+
+
+## Screened
+
+At how many of the eligible MedStar responses was 1 or more items from the DETECT tool used to screen for EA?
+
+```{r}
+screened   <- eligible %>% filter(detect_data == 1)
+n_screened <- nrow(screened) %>% format(big.mark = ",") # 1,247
+```
+
+```{r}
+not_screened   <- eligible %>% filter(detect_data == 0)
+n_not_screened <- nrow(not_screened) %>% format(big.mark = ",") # 720
+```
+
+```{r}
+rm(eligible, not_screened)
+```
+
+
+## Screen positive
+
+How many times was one or more DETECT screening items positive?
+
+```{r}
+screen_pos   <- screened %>% filter(yes_any == 1)
+n_screen_pos <- nrow(screen_pos) %>% format(big.mark = ",") # 209
+```
+
+```{r}
+screen_neg   <- screened %>% filter(yes_any == 0)
+n_screen_neg <- nrow(screen_neg) %>% format(big.mark = ",") # 1,038
+```
+
+```{r}
+rm(screened, screen_neg)
+```
+
+
+## Report to APS
+
+How many positive screens were investigated by APS?
+
+```{r}
+report_aps   <- screen_pos %>% filter(!is.na(case_num))
+n_report_aps <- nrow(report_aps) %>% format(big.mark = ",") # 20
+```
+
+```{r}
+no_report_aps   <- screen_pos %>% filter(is.na(case_num))
+n_no_report_aps <- nrow(no_report_aps) %>% format(big.mark = ",") # 189
+```
+
+```{r}
+rm(screen_pos, no_report_aps)
+```
+
+
+## Report to MedStar compliance
+
+How many reports to APS was MedStar compliance made aware of?
+
+```{r}
+report_compliance   <- report_aps %>% filter(in_compliance_data == 1)
+n_report_compliance <- nrow(report_compliance) %>% format(big.mark = ",") # 7
+```
+
+Why aren't their 9?
+
+```{r eval=FALSE}
+detect_1id %>% filter(in_compliance_data == 1)
+```
+
+Two of the incidents (id 491 and id 2608 weren't matched to APS investigations).
+
+```{r}
+no_report_compliances   <- report_aps %>% filter(in_compliance_data == 0)
+n_no_report_compliances <- nrow(no_report_compliances) %>% format(big.mark = ",") # 13
+```
+
+```{r}
+rm(report_aps, report_compliance, no_report_compliances)
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Create flow chart {#create}
+
+```{r fig.height=4, fig.width=5}
+# =============================================================================
+# Open graphical device (the type output you want)
+# =============================================================================
+jpeg(
+  '../images/figure_screening_and_reporting_flow_diagram.jpg',
+  height = 672,
+  width = 720
+)
+
+# =============================================================================
+# Create Viewport
+# =============================================================================
+grid.newpage()
+chart_width <- grid::unit(7.5, "inch")
+chart_height <- grid::unit(7, "inch")
+pushViewport(viewport(width = chart_width, height = chart_height))
+
+# =============================================================================
+# Calculations for box spacing
+# =============================================================================
+splits <- 4
+n_vert_layers <- 5
+n_horz_layers <- (splits * 2) + 1
+vert_breaks <- 1/n_vert_layers
+horz_breaks <- 1/n_horz_layers
+y_coords <- seq(vert_breaks * n_vert_layers, vert_breaks, -vert_breaks)
+x_coords <- seq(horz_breaks, horz_breaks * n_horz_layers, horz_breaks)
+
+# =============================================================================
+# Create text boxes and print to viewport
+# =============================================================================
+
+(eligible <- boxGrob(
+  label = paste("Eligible\n N =", n_eligible),
+  x = x_coords[8],
+  y = y_coords[1],
+  box_gp = gpar(fill = "white")
+))
+
+(screened <- boxGrob(
+  label = paste("Screened\n N =", n_screened),
+  x = x_coords[6],
+  y = y_coords[2],
+  box_gp = gpar(fill = "white")
+))
+
+(not_screened <- boxGrob(
+  label = paste("Not Screened\n N =", n_not_screened),
+  x = x_coords[9],
+  y = y_coords[2],
+  box_gp = gpar(fill = "white")
+))
+
+(screen_pos <- boxGrob(
+  label = paste("Screened Positive\n N =", n_screen_pos),
+  x = x_coords[4],
+  y = y_coords[3],
+  box_gp = gpar(fill = "white")
+))
+
+(screen_neg <- boxGrob(
+  label = paste("Screened Negative\n N =", n_screen_neg),
+  x = x_coords[7],
+  y = y_coords[3],
+  box_gp = gpar(fill = "white")
+))
+
+(report <- boxGrob(
+  label = paste("Report to APS\n N =", n_report_aps),
+  x = x_coords[2],
+  y = y_coords[4],
+  box_gp = gpar(fill = "white")
+))
+
+(no_report <- boxGrob(
+  label = paste("No Report to APS\n N =", n_no_report_aps),
+  x = x_coords[5],
+  y = y_coords[4],
+  box_gp = gpar(fill = "white")
+))
+
+(compliance <- boxGrob(
+  label = paste("Inform MedStar Compliance\n N =", n_report_compliance),
+  x = x_coords[1] - 0.1,
+  y = y_coords[5],
+  box_gp = gpar(fill = "white")
+))
+
+(no_compliance <- boxGrob(
+  label = paste("Did Not Inform MedStar Compliance\n N =", n_no_report_compliances),
+  x = x_coords[3] + 0.1,
+  y = y_coords[5],
+  box_gp = gpar(fill = "white")
+))
+
+# Text elements for the timeline
+# start_date <- grid.text(label = "September 17, 2015", x = 0, y = 0.05, hjust = 0.75)
+# end_date   <- grid.text(label = "October 26, 2015", x = 1, y = 0.05)
+
+# =============================================================================
+# Connect text boxes
+# =============================================================================
+
+# First, create a reusable set of parameters for the arrow
+arrow_parms <- grid::arrow(angle = 30, length = unit(4, "mm"), type = "closed")
+
+# Start building connections
+connectGrob(eligible, screened, type = "N", arrow_obj = arrow_parms)
+connectGrob(eligible, not_screened, type = "N", arrow_obj = arrow_parms)
+connectGrob(screened, screen_pos, type = "N", arrow_obj = arrow_parms)
+connectGrob(screened, screen_neg, type = "N", arrow_obj = arrow_parms)
+connectGrob(screen_pos, report, type = "N", arrow_obj = arrow_parms)
+connectGrob(screen_pos, no_report, type = "N", arrow_obj = arrow_parms)
+connectGrob(report, compliance, type = "N", arrow_obj = arrow_parms)
+connectGrob(report, no_compliance, type = "N", arrow_obj = arrow_parms)
+
+# Create timeline
+# grid.lines(
+#   x = c(0.06, 0.9), 
+#   y = c(0.05, 0.05), 
+#   arrow = arrow(
+#     angle = 30, 
+#     length = unit(4, "mm"), 
+#     ends = "both", 
+#     type = "closed"
+#   ),
+#   gp = gpar(fill = "black")
+# )
+
+popViewport()
+
+# =============================================================================
+# Stop writing to png file
+# =============================================================================
+dev.off()
+```
+
+[top](#top)
+
+
+&nbsp;
+
+-------------------------------------------------------------------------------
+
+```{r echo=FALSE}
+sessionInfo()
+```
