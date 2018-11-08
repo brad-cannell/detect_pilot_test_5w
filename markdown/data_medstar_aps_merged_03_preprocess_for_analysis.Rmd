@@ -157,8 +157,10 @@ about_data(detect_5wk_2) # 101,450 observations and 55 variables
 
 # Save preprocessed data {#save}
 
+This should be the version that will be posted on [NACJD]( https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html)
+
 ```{r}
-feather::write_feather(detect_5wk_2, "../data/detect_5wk_2.feather")
+feather::write_feather(detect_5wk_2, "../data/detect_5wk.feather")
 ```
 
 [top](#top)
