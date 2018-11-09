@@ -199,7 +199,7 @@ rm(report_aps, report_compliance, no_report_compliances)
 # Open graphical device (the type output you want)
 # =============================================================================
 jpeg(
-  '../images/figure_screening_and_reporting_flow_diagram.jpg',
+  '../images/fig_detect_5wk_screening_and_reporting_flow_diagram.jpg',
   height = 672,
   width = 720
 )
