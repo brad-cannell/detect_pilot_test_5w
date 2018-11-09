@@ -468,6 +468,9 @@ fig_responses_screenings_validation <- medstar_aps_merged %>%
 about_data(fig_responses_screenings_validation) # 1,967 observations and 3 variables
 ```
 
+
+## Save as CSV file
+
 ```{r}
 write_csv(fig_responses_screenings_validation, 
           "/Volumes/Detect/fig_responses_screenings_validation.csv")
