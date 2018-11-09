@@ -497,7 +497,7 @@ about_data(medstar_aps_merged) # 98,968 observations and 67 variables
 ## Clean up
 
 ```{r}
-rm(fig_responses_screenings_validation)
+rm(responses_screenings_validation)
 ```
 
 [top](#top)
