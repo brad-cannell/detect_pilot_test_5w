@@ -6,6 +6,14 @@ output:
     css: custom-css.css
 ---
 
+# Overview
+
+What was the impact of the screening validation in the MedStar ePCR?
+
+Initially, MedStar elected to implement the DETECT screening questions as an optional module in their ePCR. However, approximately 10 days after beginning the pilot study, they decided to add a validation rule to the ePCR. If the patient was 65 or older, and at their residence, the ePCR would validate that the DETECT screening tool was completed. If a medic selected “don’t know” for every screening item, this would satisfy the validation rule.
+
+Below we merge the calls_by_date data with the screenings_by_date data, and investigate the impact of the validation rule on reporting.
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(comment = NA)
 Sys.setenv(TZ = "US/Central")
@@ -13,41 +21,121 @@ Sys.setenv(TZ = "US/Central")
 
 ```{r message=FALSE}
 library(tidyverse)
+library(bfuncs)
 ```
 
-## Deidentified 5-week pilot data
+## Load data
 
-Created in data_medstar_aps_merged_03_preprocess_for_analysis.Rmd
+Created in data_medstar_aps_merged_02_deidentify.Rmd
 
-```{r}
-detect_5wk <- feather::read_feather("../data/detect_5wk.feather")
+**These data have already been reduced to one row per pcr**
+
+Can't use the deidentified data because we need the "day" portion of the date.
+
+```{r message=FALSE}
+fig_responses_screenings_validation <- read_csv("/Volumes/Detect/fig_responses_screenings_validation.csv")
 ```
 
 ```{r}
-about_data(detect_5wk) # 98,968 observations and 56 variables
+about_data(fig_responses_screenings_validation) # 1,967 observations and 3 variables
+```
+
+## Calculate the number of pcrs by date
+
+```{r}
+calls_by_date <- fig_responses_screenings_validation %>%
+  mutate(date = as.Date(date_entered)) %>% 
+  group_by(date) %>% 
+  summarise(pcrs = n()) %>% 
+  mutate(cum_pcrs = cumsum(pcrs)) %>% 
+  ungroup() %>% 
+  print()
 ```
 
 
+## Calculate the number of screeningsby date.
+
 ```{r}
-ggplot(data = merged_by_date, aes(x = date, y = screenings)) +
-  geom_point(aes(color = validation)) +
-  geom_point(aes(y = responses), alpha = 0.4) +
-  geom_line(aes(y = responses), alpha = 0.4) +
-  geom_line(aes(color = validation)) +
+screening_by_date <- fig_responses_screenings_validation %>% 
+  filter(detect_data == 1) %>% 
+  mutate(date = as.Date(date_entered)) %>% 
+  group_by(date) %>% 
+  summarise(screenings = n()) %>% 
+  mutate(cum_screening = cumsum(screenings)) %>% 
+  ungroup() %>% 
+  print()
+```
+
+
+## Merge the pcrs per day data with the screenings per day data.
+
+```{r}
+merged_by_date <- calls_by_date %>% 
+  left_join(screening_by_date, by = "date") %>% 
+  replace_na(list(screenings = 0, cum_screening = 0)) %>% 
+  mutate(validation = factor(if_else(date < "2015-09-28", "No", "Yes")))
+```
+
+It looks like the there's a jump on September 28. According the Richard, this is where the validation rule was added.
+
+Below we plot this data again, using different colors to indicate pre- and post-validation.
+
+
+### Create a "long" version of merged by date
+
+```{r}
+merged_by_date_long <- merged_by_date %>% 
+  select(date, pcrs, screenings, validation) %>% 
+  gather(type, count, - date, - validation) %>% 
+  print()
+```
+
+
+## Plot
+
+```{r warning=FALSE}
+fig_responses_screenings <- ggplot(merged_by_date_long, aes(x = date, y = count)) +
+  geom_line(aes(group = type, linetype = type, alpha = type)) +
+  geom_point(aes(group = type, alpha = type)) +
   annotate(
     "label",
     x = as.Date("2015-09-22"),
-    y = 12,
+    y = 20,
     label = "No Validation" 
   ) +
   annotate(
     "label",
-    x = as.Date("2015-10-17"),
-    y = 27,
+    x = as.Date("2015-10-03"),
+    y = 20,
     label = "Validation" 
   ) +
-  scale_x_date(date_minor_breaks = "1 day") +
-  theme_bw()
+  geom_vline(aes(xintercept = as.numeric(as.Date("2015-09-28"))), alpha = 0.3, linetype = 3) +
+  scale_x_date("Date", date_minor_breaks = "1 day") +
+  scale_y_continuous("Number of Responses/Screenings") +
+  scale_linetype_manual("Line Legend", values = c("longdash", "solid"), 
+                        labels = c("Qualified 911 Responses", "DETECT Screenings")) +
+  scale_alpha_discrete("Line Legend", range = c(0.4, 1.0), 
+                       labels = c("Qualified 911 Responses", "DETECT Screenings")) +
+  theme_classic() +
+  theme(
+    legend.position = c(0.8, 0.2),
+    legend.background = element_rect(color = "black")
+  ) 
+
+fig_responses_screenings
+```
+
+## Save as a jpg
+
+```{r}
+ggsave("../images/fig_responses_screenings.jpeg", fig_responses_screenings, device = "jpeg", width = 7, height = 4)
+```
+
+
+## Clean up
+
+```{r}
+rm(list = ls())
 ```
 
 [top](#top)
