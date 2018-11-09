@@ -47,7 +47,7 @@ detect_5wk <- feather::read_feather("../data/detect_5wk.feather")
 ```
 
 ```{r}
-about_data(detect_5wk) # 98,968 observations and 56 variables
+about_data(detect_5wk) # 98,968 observations and 57 variables
 ```
 
 
