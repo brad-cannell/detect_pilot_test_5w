@@ -1,0 +1,62 @@
+---
+title: "Figure: Qualified responses and completed screenings over the duration of the DETECT pilot study (9-17-2015 to 10-26-2015)"
+date: "Created: 2017-07-18 <br> Updated: `r Sys.Date()`"
+output: 
+  html_notebook:
+    css: custom-css.css
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+Sys.setenv(TZ = "US/Central")
+```
+
+```{r message=FALSE}
+library(tidyverse)
+```
+
+## Deidentified 5-week pilot data
+
+Created in data_medstar_aps_merged_03_preprocess_for_analysis.Rmd
+
+```{r}
+detect_5wk <- feather::read_feather("../data/detect_5wk.feather")
+```
+
+```{r}
+about_data(detect_5wk) # 98,968 observations and 56 variables
+```
+
+
+```{r}
+ggplot(data = merged_by_date, aes(x = date, y = screenings)) +
+  geom_point(aes(color = validation)) +
+  geom_point(aes(y = responses), alpha = 0.4) +
+  geom_line(aes(y = responses), alpha = 0.4) +
+  geom_line(aes(color = validation)) +
+  annotate(
+    "label",
+    x = as.Date("2015-09-22"),
+    y = 12,
+    label = "No Validation" 
+  ) +
+  annotate(
+    "label",
+    x = as.Date("2015-10-17"),
+    y = 27,
+    label = "Validation" 
+  ) +
+  scale_x_date(date_minor_breaks = "1 day") +
+  theme_bw()
+```
+
+[top](#top)
+
+
+&nbsp;
+
+-------------------------------------------------------------------------------
+
+```{r echo=FALSE}
+sessionInfo()
+```
