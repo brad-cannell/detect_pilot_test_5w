@@ -89,6 +89,27 @@ about_data(detect_5wk_2) # 98,968 observations and 53 variables
 ```
 
 
+## Count number of screening items completed 
+
+When the DETECT tool was used, it often wasn't the case that all screening items were used. Here, we create a variable that contains the number of screening items completed at each pcr, if any. For this purpose, "Not applicable or No Caregiver" and "Don’t Know" count as completed.
+
+```{r}
+detect_5wk_2 <- detect_5wk_2 %>% 
+  mutate_at(
+    .vars = vars(unusual_odor36:adls61),
+    .funs  = funs(answered = if_else(!is.na(.), 1, 0))
+  ) %>% 
+  mutate(
+    answered_count = select(., ends_with("answered")) %>% rowSums()
+  ) %>% 
+  select(-ends_with("answered"))
+```
+
+```{r}
+about_data(detect_5wk_2) # 98,968 observations and 54 variables
+```
+
+
 ## Recode DETECT responses to NA
 
 * We will recode "Not applicable or No Caregiver" to NA. The only variable that contained this response was no_talk51. This response was given 3 times.
@@ -99,19 +120,19 @@ about_data(detect_5wk_2) # 98,968 observations and 53 variables
 detect_5wk_2 <- detect_5wk_2 %>% 
   map_at(
     .x  = .,
-    .at = select(detect_5wk_1, unusual_odor36:adls61) %>% names(),
+    .at = select(detect_5wk_2, unusual_odor36:adls61) %>% names(),
     .f  = fct_recode, NULL = "Not applicable or No Caregiver"
   ) %>% 
   map_at(
     .x  = .,
-    .at = select(detect_5wk_1, unusual_odor36:adls61) %>% names(),
+    .at = select(detect_5wk_2, unusual_odor36:adls61) %>% names(),
     .f  = fct_recode, NULL = "Don’t Know"
   ) %>% 
   as_tibble()
 ```
 
 ```{r}
-about_data(detect_5wk_2) # 98,968 observations and 53 variables
+about_data(detect_5wk_2) # 98,968 observations and 54 variables
 ```
 
 
@@ -140,7 +161,7 @@ detect_5wk_2 <- bind_cols(
 ```
 
 ```{r}
-about_data(detect_5wk_2) # 98,968 observations and 56 variables
+about_data(detect_5wk_2) # 98,968 observations and 57 variables
 ```
 
 [top](#top)
@@ -162,7 +183,15 @@ This should be the version that will be posted on [NACJD]( https://www.icpsr.umi
 feather::write_feather(detect_5wk_2, "../data/detect_5wk.feather")
 ```
 
+
+## Clean up
+
+```{r}
+rm(list = ls())
+```
+
 [top](#top)
+
 
 &nbsp;
 
