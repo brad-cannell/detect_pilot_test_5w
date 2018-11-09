@@ -1,5 +1,5 @@
 ---
-title: "Feasability"
+title: "Feasability Analysis"
 date: "Created: 2018-11-07 <br> Updated: `r Sys.Date()`"
 output: 
   html_notebook:
