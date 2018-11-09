@@ -128,7 +128,8 @@ fig_responses_screenings
 ## Save as a jpg
 
 ```{r}
-ggsave("../images/fig_responses_screenings.jpeg", fig_responses_screenings, device = "jpeg", width = 7, height = 4)
+ggsave("../images/fig_responses_screenings_validation_line_graph.jpeg", 
+       fig_responses_screenings, device = "jpeg", width = 7, height = 4)
 ```
 
 
