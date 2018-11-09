@@ -1,0 +1,208 @@
+---
+title: "Feasability"
+date: "Created: 2018-11-07 <br> Updated: `r Sys.Date()`"
+output: 
+  html_notebook:
+    css: custom-css.css
+---
+
+# Table of contents
+
+* [Overview](#overview) 
+* [Variable management](#var-management)   
+* [The proportion of eligible older adults screened](#prop-screened)   
+* [The Proportion of Medics Who Completed a Screening](#medics)   
+* [The Proportion of Screening Items Completed](#items)   
+
+
+# Overview
+
+To evaluate the uptake and use of the DETECT screening tool, we calculated the proportion of eligible older adults screened and the proportion of medics that used the DETECT screening tool before and after the addition of the validation rule. Additionally, we calculated the number of DETECT screening tool items completed by medics on all eligible responses that took place during the study period.
+
+
+# Load packages and data
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+Sys.setenv(TZ = "US/Central")
+```
+
+```{r message=FALSE}
+library(tidyverse)
+library(bfuncs)
+```
+
+## Deidentified 5-week pilot data
+
+Created in data_medstar_aps_merged_03_preprocess_for_analysis.Rmd
+
+```{r}
+detect_5wk <- feather::read_feather("../data/detect_5wk.feather")
+```
+
+```{r}
+about_data(detect_5wk) # 98,968 observations and 57 variables
+```
+
+
+
+
+
+
+
+
+
+
+# Variable management {#var-management}
+
+## Reduce data to 1 row per study id
+
+```{r}
+detect_1id <- detect_5wk %>% 
+  group_by(id) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup()
+```
+
+```{r}
+about_data(detect_1id) # 2,611 observations and 57 variables
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# The proportion of eligible older adults screened {#prop-screened}
+
+```{r}
+eligible_screened <- detect_1id %>% 
+  summarise(
+    date                      = Sys.Date(),
+    n_eligible_responses      = sum(!is.na(incident_pcr_number)), # 1,967
+    n_detect_screenings       = sum(detect_data == 1), # 1,247
+    prop_screened             = n_detect_screenings / n_eligible_responses, # 0.63
+    percent_screened          = scales::percent(prop_screened, accuracy = 1), # 63%
+    
+    
+    n_eligible_pre_val        = sum(validation == 0, na.rm = TRUE), # 549
+    n_screenings_pre_val      = sum(validation == 0 & detect_data == 1), # 25
+    prop_screened_pre_val     = n_screenings_pre_val / n_eligible_pre_val, # 0.045
+    percent_screened_pre_val  = scales::percent(prop_screened_pre_val, accuracy = 1), # 5%
+    
+    n_eligible_post_val       = sum(validation == 1, na.rm = TRUE), # 1,418
+    n_screenings_post_val     = sum(validation == 1 & detect_data == 1, na.rm = TRUE), # 1,222
+    prop_screened_post_val    = n_screenings_post_val / n_eligible_post_val, # 0.86
+    percent_screened_post_val = scales::percent(prop_screened_post_val, accuracy = 1) # 86%
+  ) %>% 
+  mutate_all(format, big.mark = ",") %>% 
+  select(-starts_with("prop")) %>% 
+  print()
+```
+
+During the pilot test, MedStar medics responded to `r eligible_screened$n_eligible_responses` 911 calls for adults aged 65 and older at their residence. Those `r eligible_screened$n_eligible_responses` responses resulted in `r eligible_screened$n_detect_screenings` DETECT screenings (`r eligible_screened$percent_screened`). In the eleven days prior to the validation rule implementation, MedStar medics responded to `r eligible_screened$n_eligible_pre_val` eligible 911 responses and completed `r eligible_screened$n_screenings_pre_val` (`r eligible_screened$percent_screened_pre_val`) DETECT screenings. In the time period after implementing the validation rule, MedStar medics responded to `r eligible_screened$n_eligible_post_val` eligible 911 responses and completed `r eligible_screened$n_screenings_post_val` (`r eligible_screened$percent_screened_post_val`) DETECT screenings.
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# The Proportion of Medics Who Completed a Screening {#medics}
+
+```{r}
+medics <- detect_5wk %>% 
+  filter(!is.na(incident_pcr_number)) %>% 
+  group_by(incident_pcr_number, crew_member_id) %>% # Keep one row per pcr and medic
+  filter(row_number() == 1) %>% 
+  ungroup() %>% 
+  summarise(
+    n_medics_eligible_response        = unique(crew_member_id) %>% length(), # 258
+    n_medics_complete_screening       = filter(., detect_data == 1) %>% 
+      pull(crew_member_id) %>% unique() %>% length(), # 251
+    prop_medics_complete_screening    = n_medics_complete_screening / n_medics_eligible_response,
+    percent_medics_complete_screening = scales::percent(prop_medics_complete_screening, accuracy = 1), # 97%
+    
+    n_medics_eligible_response_pre_val        = filter(., validation == 0) %>% 
+      pull(crew_member_id) %>% unique() %>% length(), # 225
+    n_medics_complete_screening_pre_val       = filter(., detect_data == 1 & validation == 0) %>% 
+      pull(crew_member_id) %>% unique() %>% length(), # 43
+    prop_medics_complete_screening_pre_val    = n_medics_complete_screening_pre_val / n_medics_eligible_response_pre_val,
+    percent_medics_complete_screening_pre_val = scales::percent(prop_medics_complete_screening_pre_val, accuracy = 1), # 19%
+    
+    n_medics_eligible_response_post_val        = filter(., validation == 1) %>% 
+      pull(crew_member_id) %>% unique() %>% length(), # 254
+    n_medics_complete_screening_post_val       = filter(., detect_data == 1 & validation == 1) %>% 
+      pull(crew_member_id) %>% unique() %>% length(), # 251
+    prop_medics_complete_screening_post_val    = n_medics_complete_screening_post_val / n_medics_eligible_response_post_val,
+    percent_medics_complete_screening_post_val = scales::percent(prop_medics_complete_screening_post_val, accuracy = 1) # 99%
+  ) %>% 
+  mutate_all(format, big.mark = ",") %>% 
+  select(-starts_with("prop")) %>%
+  print()
+```
+
+During the pilot period, `r medics$n_medics_eligible_response` medics participated in an eligible 911 response. Of those `r medics$n_medics_eligible_response` medics, `r medics$n_medics_complete_screening` (`r medics$percent_medics_complete_screening`) completed at least one DETECT screening. Prior to the validation rule, `r medics$percent_medics_complete_screening_pre_val` of medics who participated in an eligible 911 response completed at least one DETECT screening, compared to `r medics$percent_medics_complete_screening_post_val` after the validation rule.
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# The Proportion of Screening Items Completed {#items}
+
+```{r}
+items_completed <- detect_1id %>% 
+  filter(detect_data == 1) %>% # Keep DETECT screenings only
+  summarise(
+    prop_5_fewer = sum(answered_count <= 5) / n(),
+    percent_5_fewer = scales::percent(prop_5_fewer, accuracy = 1), # 42%
+    
+    prop_26 = sum(answered_count == 26) / n(),
+    percent_26 = scales::percent(prop_26, accuracy = 1) # 53%
+  ) %>% 
+  print()
+```
+
+```{r}
+items_completed_matched <- detect_1id %>%
+  filter(detect_data == 1 & !is.na(case_num)) %>% # Keep screenings matched to investigations (44)
+  summarise(
+    prop_5_fewer = sum(answered_count <= 5) / n(),
+    percent_5_fewer = scales::percent(prop_5_fewer, accuracy = 1), # 32%
+    
+    prop_26 = sum(answered_count == 26) / n(),
+    percent_26 = scales::percent(prop_26, accuracy = 1) # 59%
+  ) %>% 
+  print()
+```
+
+
+The distribution of screening items completed was bimodal, and not effectively characterized by the median. At `r items_completed$percent_5_fewer` of DETECT screenings, medics completed 5 or fewer screening items. Conversely, at `r items_completed$percent_26` of the DETECT screenings, medics completed all 26 screening items. A similar pattern was observed among screenings that resulted in a report to APS. One-third completed 5 items or less, while `r items_completed$percent_26` completed all 26 items. The detailed completion patterns for each individual screening item are given in Table 1.
+
+[top](#top)
+
+&nbsp;
+
+-------------------------------------------------------------------------------
+
+```{r echo=FALSE}
+sessionInfo()
+```
