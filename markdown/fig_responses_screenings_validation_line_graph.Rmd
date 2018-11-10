@@ -101,13 +101,15 @@ fig_responses_screenings <- ggplot(merged_by_date_long, aes(x = date, y = count)
     "label",
     x = as.Date("2015-09-22"),
     y = 20,
-    label = "No Validation" 
+    label = "No Validation",
+    color = "dark red"
   ) +
   annotate(
     "label",
     x = as.Date("2015-10-03"),
     y = 20,
-    label = "Validation" 
+    label = "Validation",
+    color = "dark blue"
   ) +
   geom_vline(aes(xintercept = as.numeric(as.Date("2015-09-28"))), alpha = 0.3, linetype = 3) +
   scale_x_date("Date", date_minor_breaks = "1 day") +
