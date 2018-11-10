@@ -73,7 +73,7 @@ detect_1id <- detect_5wk %>%
 ```
 
 ```{r}
-about_data(detect_1id) # 2,611 observations and 56 variables
+about_data(detect_1id) # 2,611 observations and 57 variables
 ```
 
 
@@ -132,7 +132,7 @@ n_screen_neg <- nrow(screen_neg) %>% format(big.mark = ",") # 1,038
 ```
 
 ```{r}
-rm(screened, screen_neg)
+rm(screened)
 ```
 
 
@@ -141,17 +141,27 @@ rm(screened, screen_neg)
 How many positive screens were investigated by APS?
 
 ```{r}
-report_aps   <- screen_pos %>% filter(!is.na(case_num))
-n_report_aps <- nrow(report_aps) %>% format(big.mark = ",") # 20
+screen_pos_match_aps   <- screen_pos %>% filter(!is.na(case_num))
+n_screen_pos_match_aps <- nrow(screen_pos_match_aps) %>% format(big.mark = ",") # 20
 ```
 
 ```{r}
-no_report_aps   <- screen_pos %>% filter(is.na(case_num))
-n_no_report_aps <- nrow(no_report_aps) %>% format(big.mark = ",") # 189
+screen_neg_match_aps   <- screen_neg %>% filter(!is.na(case_num))
+n_screen_neg_match_aps <- nrow(screen_neg_match_aps) %>% format(big.mark = ",") # 22
 ```
 
 ```{r}
-rm(screen_pos, no_report_aps)
+screen_pos_no_match_aps   <- screen_pos %>% filter(is.na(case_num))
+n_screen_pos_no_match_aps <- nrow(screen_pos_no_match_aps) %>% format(big.mark = ",") # 189
+```
+
+```{r}
+screen_neg_no_match_aps   <- screen_neg %>% filter(is.na(case_num))
+n_screen_neg_no_match_aps <- nrow(screen_neg_no_match_aps) %>% format(big.mark = ",") # 1,014
+```
+
+```{r}
+rm(screen_pos, screen_neg, screen_neg_match_aps, screen_pos_no_match_aps, screen_neg_no_match_aps)
 ```
 
 
@@ -160,7 +170,7 @@ rm(screen_pos, no_report_aps)
 How many reports to APS was MedStar compliance made aware of?
 
 ```{r}
-report_compliance   <- report_aps %>% filter(in_compliance_data == 1)
+report_compliance   <- screen_pos_match_aps %>% filter(in_compliance_data == 1)
 n_report_compliance <- nrow(report_compliance) %>% format(big.mark = ",") # 7
 ```
 
@@ -173,12 +183,12 @@ detect_1id %>% filter(in_compliance_data == 1)
 Two of the incidents (id 491 and id 2608 weren't matched to APS investigations).
 
 ```{r}
-no_report_compliances   <- report_aps %>% filter(in_compliance_data == 0)
+no_report_compliances   <- screen_pos_match_aps %>% filter(in_compliance_data == 0)
 n_no_report_compliances <- nrow(no_report_compliances) %>% format(big.mark = ",") # 13
 ```
 
 ```{r}
-rm(report_aps, report_compliance, no_report_compliances)
+rm(screen_pos_match_aps, report_compliance, no_report_compliances)
 ```
 
 [top](#top)
@@ -215,7 +225,7 @@ pushViewport(viewport(width = chart_width, height = chart_height))
 # =============================================================================
 # Calculations for box spacing
 # =============================================================================
-splits <- 4
+splits <- 5
 n_vert_layers <- 5
 n_horz_layers <- (splits * 2) + 1
 vert_breaks <- 1/n_vert_layers
@@ -229,7 +239,7 @@ x_coords <- seq(horz_breaks, horz_breaks * n_horz_layers, horz_breaks)
 
 (eligible <- boxGrob(
   label = paste("Eligible\n N =", n_eligible),
-  x = x_coords[8],
+  x = x_coords[9],
   y = y_coords[1],
   box_gp = gpar(fill = "white")
 ))
@@ -243,7 +253,7 @@ x_coords <- seq(horz_breaks, horz_breaks * n_horz_layers, horz_breaks)
 
 (not_screened <- boxGrob(
   label = paste("Not Screened\n N =", n_not_screened),
-  x = x_coords[9],
+  x = x_coords[11],
   y = y_coords[2],
   box_gp = gpar(fill = "white")
 ))
@@ -257,35 +267,49 @@ x_coords <- seq(horz_breaks, horz_breaks * n_horz_layers, horz_breaks)
 
 (screen_neg <- boxGrob(
   label = paste("Screened Negative\n N =", n_screen_neg),
-  x = x_coords[7],
+  x = x_coords[9],
   y = y_coords[3],
   box_gp = gpar(fill = "white")
 ))
 
-(report <- boxGrob(
-  label = paste("Report to APS\n N =", n_report_aps),
+(pos_matched <- boxGrob(
+  label = paste("Matched to APS\n N =", n_screen_pos_match_aps),
   x = x_coords[2],
   y = y_coords[4],
   box_gp = gpar(fill = "white")
 ))
 
-(no_report <- boxGrob(
-  label = paste("No Report to APS\n N =", n_no_report_aps),
+(pos_no_match <- boxGrob(
+  label = paste("Not Matched to APS\n N =", n_screen_pos_no_match_aps),
   x = x_coords[5],
+  y = y_coords[4],
+  box_gp = gpar(fill = "white")
+))
+
+(neg_matched <- boxGrob(
+  label = paste("Matched to APS\n N =", n_screen_neg_match_aps),
+  x = x_coords[8],
+  y = y_coords[4],
+  box_gp = gpar(fill = "white")
+))
+
+(neg_no_match <- boxGrob(
+  label = paste("Not Matched to APS\n N =", n_screen_neg_no_match_aps),
+  x = x_coords[11],
   y = y_coords[4],
   box_gp = gpar(fill = "white")
 ))
 
 (compliance <- boxGrob(
   label = paste("Inform MedStar Compliance\n N =", n_report_compliance),
-  x = x_coords[1] - 0.1,
+  x = x_coords[1] - 0.09,
   y = y_coords[5],
   box_gp = gpar(fill = "white")
 ))
 
 (no_compliance <- boxGrob(
   label = paste("Did Not Inform MedStar Compliance\n N =", n_no_report_compliances),
-  x = x_coords[3] + 0.1,
+  x = x_coords[4] + 0.05,
   y = y_coords[5],
   box_gp = gpar(fill = "white")
 ))
@@ -306,10 +330,12 @@ connectGrob(eligible, screened, type = "N", arrow_obj = arrow_parms)
 connectGrob(eligible, not_screened, type = "N", arrow_obj = arrow_parms)
 connectGrob(screened, screen_pos, type = "N", arrow_obj = arrow_parms)
 connectGrob(screened, screen_neg, type = "N", arrow_obj = arrow_parms)
-connectGrob(screen_pos, report, type = "N", arrow_obj = arrow_parms)
-connectGrob(screen_pos, no_report, type = "N", arrow_obj = arrow_parms)
-connectGrob(report, compliance, type = "N", arrow_obj = arrow_parms)
-connectGrob(report, no_compliance, type = "N", arrow_obj = arrow_parms)
+connectGrob(screen_pos, pos_matched, type = "N", arrow_obj = arrow_parms)
+connectGrob(screen_pos, pos_no_match, type = "N", arrow_obj = arrow_parms)
+connectGrob(screen_neg, neg_matched, type = "N", arrow_obj = arrow_parms)
+connectGrob(screen_neg, neg_no_match, type = "N", arrow_obj = arrow_parms)
+connectGrob(pos_matched, compliance, type = "N", arrow_obj = arrow_parms)
+connectGrob(pos_matched, no_compliance, type = "N", arrow_obj = arrow_parms)
 
 # Create timeline
 # grid.lines(
@@ -330,6 +356,13 @@ popViewport()
 # Stop writing to png file
 # =============================================================================
 dev.off()
+```
+
+
+## Clean up
+
+```{r}
+rm(list = ls())
 ```
 
 [top](#top)
