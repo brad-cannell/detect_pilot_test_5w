@@ -116,23 +116,24 @@ about_data(detect_5wk_2) # 98,968 observations and 54 variables
 
 * We will also recode "Don’t Know" to NA.
 
+* Create new variables instead of modifying the original variables
+
 ```{r}
 detect_5wk_2 <- detect_5wk_2 %>% 
-  map_at(
-    .x  = .,
-    .at = select(detect_5wk_2, unusual_odor36:adls61) %>% names(),
-    .f  = fct_recode, NULL = "Not applicable or No Caregiver"
-  ) %>% 
-  map_at(
-    .x  = .,
-    .at = select(detect_5wk_2, unusual_odor36:adls61) %>% names(),
-    .f  = fct_recode, NULL = "Don’t Know"
-  ) %>% 
-  as_tibble()
+  mutate_at(
+    .vars = vars(unusual_odor36:adls61),
+    .funs = funs(
+      recode_na = fct_recode(
+        ., 
+        NULL = "Not applicable or No Caregiver",
+        NULL = "Don’t Know"
+      )
+    )
+  )
 ```
 
 ```{r}
-about_data(detect_5wk_2) # 98,968 observations and 54 variables
+about_data(detect_5wk_2) # 98,968 observations and 80 variables
 ```
 
 
@@ -161,7 +162,7 @@ detect_5wk_2 <- bind_cols(
 ```
 
 ```{r}
-about_data(detect_5wk_2) # 98,968 observations and 57 variables
+about_data(detect_5wk_2) # 98,968 observations and 83 variables
 ```
 
 [top](#top)
