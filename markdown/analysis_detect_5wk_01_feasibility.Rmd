@@ -13,6 +13,7 @@ output:
 * [The proportion of eligible older adults screened](#prop-screened)   
 * [The Proportion of Medics Who Completed a Screening](#medics)   
 * [The Proportion of Screening Items Completed](#items)   
+* [Save results](#save)   
 
 
 # Overview
@@ -41,7 +42,7 @@ detect_5wk <- feather::read_feather("../data/detect_5wk.feather")
 ```
 
 ```{r}
-about_data(detect_5wk) # 98,968 observations and 83 variables
+about_data(detect_5wk) # 99,051 observations and 84 variables
 ```
 
 
@@ -65,7 +66,7 @@ detect_1id <- detect_5wk %>%
 ```
 
 ```{r}
-about_data(detect_1id) # 2,611 observations and 83 variables
+about_data(detect_1id) # 2,609 observations and 84 variables
 ```
 
 [top](#top)
@@ -183,10 +184,10 @@ items_completed <- detect_1id %>%
 
 ```{r}
 items_completed_matched <- detect_1id %>%
-  filter(detect_data == 1 & !is.na(case_num)) %>% # Keep screenings matched to investigations (44)
+  filter(detect_data == 1 & !is.na(case_num)) %>% # Keep screenings matched to investigations (46)
   summarise(
     prop_5_fewer = sum(answered_count <= 5) / n(),
-    percent_5_fewer = scales::percent(prop_5_fewer, accuracy = 1), # 32%
+    percent_5_fewer = scales::percent(prop_5_fewer, accuracy = 1), # 33%
     
     prop_26 = sum(answered_count == 26) / n(),
     percent_26 = scales::percent(prop_26, accuracy = 1) # 59%
@@ -198,6 +199,25 @@ items_completed_matched <- detect_1id %>%
 The distribution of screening items completed was bimodal, and not effectively characterized by the median. At `r items_completed$percent_5_fewer` of DETECT screenings, medics completed 5 or fewer screening items. Conversely, at `r items_completed$percent_26` of the DETECT screenings, medics completed all 26 screening items. A similar pattern was observed among screenings that resulted in a report to APS. One-third completed 5 items or less, while `r items_completed$percent_26` completed all 26 items. The detailed completion patterns for each individual screening item are given in Table 1.
 
 [top](#top)
+
+
+
+
+
+
+
+
+
+
+# Save results {#save}
+
+```{r}
+results_feasibility <- bind_cols(eligible_screened, medics, items_completed, items_completed_matched) 
+```
+
+```{r}
+write_csv(results_feasibility, "../data/results_feasibility.csv")
+```
 
 &nbsp;
 

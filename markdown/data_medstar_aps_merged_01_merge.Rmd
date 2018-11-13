@@ -428,9 +428,11 @@ medstar_nested <- screenings %>%
     birth_year = lubridate::year(dob)
   ) %>% 
   
-  # Nest columns that aren't needed for the RecordLinkage process
-  nest(-date_entered, -incident_pcr_number, -first_name, -last_name, -starts_with("birth"), 
-       .key = "medstar_nested") %>% 
+  # Nest all but the following columns - not needed for the RecordLinkage process
+  # and we want to reduce the dataset to one row per pcr.
+  # Important to use response_date instead of date_entered
+  nest(-response_date, -incident_pcr_number, -first_name, -last_name, -starts_with("birth"), 
+       -address_street, .key = "medstar_nested") %>% 
   
   # Ungroup
   ungroup()
@@ -446,29 +448,8 @@ medstar_nested %>%
   )
 ```
 
-That means that one PCR is duplicated. Below we manually check for differences (results hidden to protect patient privacy).
-
-```{r eval=FALSE}
-medstar_nested %>%
-  group_by(incident_pcr_number) %>%
-  filter(max(row_number()) == 2) %>%
-  unnest() %>%
-  bfuncs::widen_columns(crew_member_id, medical_surgery_hist, current_meds) %>%
-  summarise_all(.funs = funs(unique(.) %>% length())) %>%
-  select_if(.predicate = function(x) x > 1)
-```
-
-The only difference is the data entered. We have confirmation from MedStar that this can sometimes happen when someone updates the record in the ePCR. We will keep the earliest record only. Keep in mind that nothing else about the two records differs.
-
 ```{r}
-medstar_nested <- medstar_nested %>% 
-  group_by(incident_pcr_number) %>% 
-  filter(row_number() == 1) %>% 
-  ungroup()
-```
-
-```{r}
-about_data(medstar_nested) # 1,247 observations and 8 variables
+about_data(medstar_nested) # 1,247 observations and 9 variables
 ```
 
 At this point each screening (incident_pcr_number) is a single row that can be matched to rows in the APS data.
@@ -494,12 +475,23 @@ Again, we will get around this by nesting all columns that may result in multipl
 
 ```{r}
 client_data_nested <- client_data %>% 
+  
+  # Separate DOB and address into its component parts
   mutate(
     birth_mnth = lubridate::month(dob),
     birth_day  = lubridate::day(dob),
-    birth_year = lubridate::year(dob)
+    birth_year = lubridate::year(dob),
+    address_num = stringr::str_extract(address, "^\\d{1,5}"),
+    address_street = stringr::str_trim(str_replace(address, "^\\d{1,5}", ""))
   ) %>% 
-  nest(-case_num, -intake_start, -first_name, -last_name, -starts_with("birth"), .key = "aps_nested")
+  
+  # Nest all but the following columns - not needed for the RecordLinkage process
+  # and we want to reduce the dataset to one row per case number
+  nest(-case_num, -intake_start, -first_name, -last_name, -starts_with("birth"),
+       -address_street, .key = "aps_nested") %>% 
+  
+  # Ungroup
+  ungroup()
 ```
 
 
@@ -516,10 +508,30 @@ client_data_nested %>%
 That means that some case numbers are duplicated. Below we manually check for differences (results hidden to protect patient privacy).
 
 ```{r eval=FALSE}
-client_data_nested %>% 
-  group_by(case_num) %>% 
-  filter(max(row_number()) > 1) %>% 
-  unnest()
+bind_cols(
+  
+  # Use this part only if you want to view all records - even those that
+  # only differ by intake_start and intake_stage
+  client_data_nested %>% 
+    group_by(case_num) %>% 
+    filter(max(row_number()) > 1) %>% 
+    unnest(),
+  
+  client_data_nested %>% 
+    group_by(case_num) %>% 
+    filter(max(row_number()) > 1) %>% 
+    unnest() %>% 
+    mutate_all(.funs = funs(diff = length(unique(.)) > 1)) %>% 
+    ungroup() %>% 
+    select(ends_with("diff")) %>% 
+    mutate(diffs = rowSums(.))
+) %>%
+  
+  ungroup() %>%
+  # If a case number only differs by intake_start and intake_stage, 
+  # then I don't want to view it
+  mutate(keep = if_else(intake_start_diff == TRUE & intake_stage_diff == TRUE & diffs == 2,0, 1)) %>% 
+  filter(keep == 1)
 ```
 
 After manual review, duplicates within case are due to different intake start dates (i.e., report dates), different spellings of names at different intakes (reports). There are also a couple differences in DOB between intakes. We should keep both spellings and DOB's for the matching process. We can filter them later as needed.
@@ -542,12 +554,16 @@ Below, we will use various functions from the [RecordLinkage package](https://cr
 ## Subset matching variables
 
 ```{r}
-medstar_compare <- medstar_nested %>% 
-  select(-medstar_nested)
+medstar_compare <- medstar_nested %>%
+  select(-medstar_nested) %>%
+  # The variables you want to compare have to appear in the same order in both datasets
+  select(incident_pcr_number, response_date, first_name, last_name, starts_with("birth"), 
+         address_street)
 
-client_data_compare <- client_data_nested %>% 
-  select(-aps_nested) %>% 
-  select(intake_start, case_num, everything()) # This just make the rows match up below
+client_data_compare <- client_data_nested %>%
+  select(-aps_nested) %>%
+  # The variables you want to compare have to appear in the same order in both datasets
+  select(case_num, intake_start, first_name, last_name, starts_with("birth"), address_street)
 ```
 
 ```{r}
@@ -567,8 +583,8 @@ Below we Compares each record in data set 1 to each record in data set 2 until a
 rpairs_jar <- RecordLinkage::compare.linkage(
   dataset1  = medstar_compare, 
   dataset2  = client_data_compare,
-  strcmp    = c("first_name", "last_name"),
-  exclude   = c("incident_pcr_number", "date_entered") # Only uses the names from dataset1
+  strcmp  = c("first_name", "last_name", "address_street"),
+  exclude = c("incident_pcr_number", "response_date")
 )
 ```
 
@@ -617,10 +633,10 @@ pairs_possible_matches <- pairs_possible_matches %>%
   )
 ```
 
-When the weight dips below 0.8455104, the matches begin to break down.
+When the weight dips below 0.7640929, the matches begin to break down.
 
 ```{r}
-max_weight <- 0.8455104 - .0001 # Because threshold below is not inclusive
+max_weight <- 0.7640929 - .0001 # Because threshold below is not inclusive
 ```
 
 
@@ -669,11 +685,11 @@ date_filter <- pairs_possible_matches %>%
   rename(
     row_medstar         = row, 
     incident_pcr_number = case_pcr_num,
-    date_entered        = date
+    response_date       = date
   ) %>% 
 
   # Check Medstar data precedes the date in the client data
-  filter(date_entered <= intake_date) %>%
+  filter(response_date <= intake_date) %>%
   
   # Keep earliest APS investigation
   group_by(incident_pcr_number) %>% 
@@ -737,7 +753,7 @@ medstar_complete_w_pair <- medstar_complete_w_pair %>%
 ```
 
 ```{r}
-about_data(medstar_complete_w_pair) # 63,993 observations and 56 variables
+about_data(medstar_complete_w_pair) # 64,059 observations and 56 variables
 ```
 
 ```{r}
@@ -854,15 +870,17 @@ check_conflicts <- medstar_aps_merged %>%
   mutate_at(non_joined, as.character) %>% # For easier comparison later
   
   mutate(
-    first_name = merge_like_variables(., first_name),
-    last_name  = merge_like_variables(., last_name),
-    birth_mnth = merge_like_variables(., birth_mnth),
-    birth_day  = merge_like_variables(., birth_day),
-    birth_year = merge_like_variables(., birth_year),
-    age        = merge_like_variables(., age),
-    address    = merge_like_variables(., address),
-    city       = merge_like_variables(., city),
-    zip        = merge_like_variables(., zip)
+    first_name     = merge_like_variables(., first_name),
+    last_name      = merge_like_variables(., last_name),
+    birth_mnth     = merge_like_variables(., birth_mnth),
+    birth_day      = merge_like_variables(., birth_day),
+    birth_year     = merge_like_variables(., birth_year),
+    age            = merge_like_variables(., age),
+    address_street = merge_like_variables(., address_street),
+    address        = merge_like_variables(., address),
+    city           = merge_like_variables(., city),
+    zip            = merge_like_variables(., zip),
+    address_num    = merge_like_variables(., address_num)
   )%>%
   
   # Arrange columns for easier comparison
@@ -875,7 +893,7 @@ check_conflicts <- medstar_aps_merged %>%
 ```
 
 ```{r}
-about_data(check_conflicts) # 64,837 observations and 78 variables
+about_data(check_conflicts) # 64,901 observations and 82 variables
 ```
 
 
@@ -886,7 +904,18 @@ var <- quo(first_name)
 ```
 
 ```{r}
-check_conflicts %>% count_conflicts(var) # 0
+check_conflicts %>% count_conflicts(var) # 1
+```
+
+```{r eval=FALSE}
+check_conflicts %>% view_conflicts(var) # Results hidden
+```
+
+* In this case, it appears as though APS has the correct name.
+
+```{r}
+check_conflicts <- check_conflicts %>% resolve_conflict(var, "use_aps")
+check_conflicts %>% view_conflicts(var)
 ```
 
 ```{r}
@@ -894,7 +923,7 @@ check_conflicts <- check_conflicts %>% drop_suffix(var)
 ```
 
 ```{r}
-about_data(check_conflicts) # 64,837 observations and 76 variables
+about_data(check_conflicts) # 64,901 observations and 80 variables
 ```
 
 
@@ -924,7 +953,7 @@ check_conflicts <- check_conflicts %>% drop_suffix(var)
 ```
 
 ```{r}
-about_data(check_conflicts) # 64,837 observations and 74 variables
+about_data(check_conflicts) # 64,901 observations and 78 variables
 ```
 
 
@@ -943,7 +972,7 @@ check_conflicts <- check_conflicts %>% drop_suffix(var)
 ```
 
 ```{r}
-about_data(check_conflicts) # 64,837 observations and 72 variables
+about_data(check_conflicts) # 64,901 observations and 76 variables
 ```
 
 
@@ -973,7 +1002,7 @@ check_conflicts <- check_conflicts %>% drop_suffix(var)
 ```
 
 ```{r}
-about_data(check_conflicts) # 64,837 observations and 70 variables
+about_data(check_conflicts) # 64,901 observations and 74 variables
 ```
 
 
@@ -1003,7 +1032,7 @@ check_conflicts <- check_conflicts %>% drop_suffix(var)
 ```
 
 ```{r}
-about_data(check_conflicts) # 64,837 observations and 68 variables
+about_data(check_conflicts) # 64,901 observations and 72 variables
 ```
 
 
@@ -1033,7 +1062,38 @@ check_conflicts <- check_conflicts %>% drop_suffix(var)
 ```
 
 ```{r}
-about_data(check_conflicts) # 64,837 observations and 66 variables
+about_data(check_conflicts) # 64,901 observations and 70 variables
+```
+
+
+### Address Street
+
+```{r echo=FALSE}
+var <- quo(address_street)
+```
+
+```{r}
+check_conflicts %>% count_conflicts(var) # 15
+```
+
+```{r eval=FALSE}
+check_conflicts %>% view_conflicts(var) %>% 
+  select(address_street.medstar, address_street.aps) # Results hidden
+```
+
+* Because MedStar is our primary data source and we are interested in the medics’ assessment of the older adult/environment were the emergency response took place, we will keep the medstar row.
+
+```{r}
+check_conflicts <- check_conflicts %>% resolve_conflict(var, "use_medstar")
+check_conflicts %>% view_conflicts(var)
+```
+
+```{r}
+check_conflicts <- check_conflicts %>% drop_suffix(var)
+```
+
+```{r}
+about_data(check_conflicts) # 64,901 observations and 68 variables
 ```
 
 
@@ -1065,7 +1125,7 @@ check_conflicts <- check_conflicts %>% drop_suffix(var)
 ```
 
 ```{r}
-about_data(check_conflicts) # 64,837 observations and 64 variables
+about_data(check_conflicts) # 64,901 observations and 66 variables
 ```
 
 
@@ -1097,7 +1157,7 @@ check_conflicts <- check_conflicts %>% drop_suffix(var)
 ```
 
 ```{r}
-about_data(check_conflicts) # 64,837 observations and 62 variables
+about_data(check_conflicts) # 64,901 observations and 64 variables
 ```
 
 
@@ -1127,7 +1187,37 @@ check_conflicts <- check_conflicts %>% drop_suffix(var)
 ```
 
 ```{r}
-about_data(check_conflicts) # 64,837 observations and 60 variables
+about_data(check_conflicts) # 64,901 observations and 62 variables
+```
+
+
+### Address Number
+
+```{r echo=FALSE}
+var <- quo(address_num)
+```
+
+```{r}
+check_conflicts %>% count_conflicts(var) # 6
+```
+
+```{r eval=FALSE}
+check_conflicts %>% view_conflicts(var) # Results hidden
+```
+
+* Because MedStar is our primary data source and we are interested in the medics’ assessment of the older adult/environment were the emergency response took place, we will keep the medstar row.
+
+```{r}
+check_conflicts <- check_conflicts %>% resolve_conflict(var, "use_medstar")
+check_conflicts %>% view_conflicts(var)
+```
+
+```{r}
+check_conflicts <- check_conflicts %>% drop_suffix(var)
+```
+
+```{r}
+about_data(check_conflicts) # 64,901 observations and 60 variables
 ```
 
 
@@ -1138,7 +1228,7 @@ medstar_aps_merged <- check_conflicts
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 64,837 observations and 60 variables
+about_data(medstar_aps_merged) # 64,901 observations and 60 variables
 ```
 
 
@@ -1180,7 +1270,7 @@ medstar_aps_merged <- medstar_aps_merged %>% select(!!!vars_to_keep)
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 64,837 observations and 52 variables
+about_data(medstar_aps_merged) # 64,901 observations and 52 variables
 ```
 
 ## Check for duplicate rows
@@ -1192,7 +1282,7 @@ medstar_aps_merged <- medstar_aps_merged %>% distinct()
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 64,685 observations and 52 variables
+about_data(medstar_aps_merged) # 64,749 observations and 52 variables
 ```
 
 [top](#top)
@@ -1248,14 +1338,12 @@ How many rows in each sample?
 ```{r}
 cat(
   " Rows in the merged data:", 
-  format(nrow(merged_incidents), big.mark = ","), # 63,993
+  format(nrow(merged_incidents), big.mark = ","), # 64,059
   "\n",
   "Rows in the original data:",
   format(nrow(original_incidents), big.mark = ",") # 64,059
 )
 ```
-
-There are more rows in the original data than in the merged data. 
 
 Let's look for variables in the original data that have more unique values than in the merged data.
 
@@ -1263,22 +1351,7 @@ Let's look for variables in the original data that have more unique values than 
 compare_n_unique_values(merged_incidents, original_incidents)
 ```
 
-The merged data has 1 additional unique value for date entered and one additional unique value for last name. 
-
-View the date entered that differs (results hidden to protect privacy)
-
-```{r eval=FALSE}
-get_drop_value(merged_incidents, original_incidents, date_entered)
-```
-
-In "Prepare MedStar data for record matching" above we dropped extra dates entered within pcr number. As noted above, this was likely the result of going back in and editing a record. The information for our variables of interest was identical within pcr for both dates.
-
-We will remove the rows associated with that date from the original data
-
-```{r}
-original_incidents <- original_incidents %>% 
-  filter(date_entered != get_drop_value(merged_incidents, original_incidents, date_entered))
-```
+The merged data has 1 additional unique value for last name. 
 
 View the last name that differs (results hidden to protect privacy)
 
@@ -1589,14 +1662,14 @@ medstar_aps_merged <- medstar_aps_merged %>% left_join(adc, by = "case_num")
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 66,200 observations and 54 variables
+about_data(medstar_aps_merged) # 66,283 observations and 57 variables
 ```
 
 
 ## Look for duplicate rows
 
 ```{r}
-medstar_aps_merged %>% distinct() %>% nrow() # 66,200
+medstar_aps_merged %>% distinct() %>% nrow() # 66,283
 ```
 
 There are no duplicate rows.
@@ -1639,7 +1712,7 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 101,450 observations and 64 variables
+about_data(medstar_aps_merged) # 101,533 observations and 64 variables
 ```
 
 Set detect_data to 0 for the APS rows we just added that aren't associated with a DETECT screening

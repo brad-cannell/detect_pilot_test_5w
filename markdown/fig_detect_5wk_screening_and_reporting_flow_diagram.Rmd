@@ -47,7 +47,7 @@ detect_5wk <- feather::read_feather("../data/detect_5wk.feather")
 ```
 
 ```{r}
-about_data(detect_5wk) # 98,968 observations and 83 variables
+about_data(detect_5wk) # 99,051 observations and 84 variables
 ```
 
 
@@ -73,7 +73,7 @@ detect_1id <- detect_5wk %>%
 ```
 
 ```{r}
-about_data(detect_1id) # 2,611 observations and 83 variables
+about_data(detect_1id) # 2,609 observations and 84 variables
 ```
 
 
@@ -136,28 +136,28 @@ rm(screened)
 ```
 
 
-## Report to APS
+## Match to APS
 
-How many positive screens were investigated by APS?
+How many screenings could be matched to an APS investigation?
 
 ```{r}
 screen_pos_match_aps   <- screen_pos %>% filter(!is.na(case_num))
-n_screen_pos_match_aps <- nrow(screen_pos_match_aps) %>% format(big.mark = ",") # 20
+n_screen_pos_match_aps <- nrow(screen_pos_match_aps) %>% format(big.mark = ",") # 21
 ```
 
 ```{r}
 screen_neg_match_aps   <- screen_neg %>% filter(!is.na(case_num))
-n_screen_neg_match_aps <- nrow(screen_neg_match_aps) %>% format(big.mark = ",") # 22
+n_screen_neg_match_aps <- nrow(screen_neg_match_aps) %>% format(big.mark = ",") # 25
 ```
 
 ```{r}
 screen_pos_no_match_aps   <- screen_pos %>% filter(is.na(case_num))
-n_screen_pos_no_match_aps <- nrow(screen_pos_no_match_aps) %>% format(big.mark = ",") # 189
+n_screen_pos_no_match_aps <- nrow(screen_pos_no_match_aps) %>% format(big.mark = ",") # 188
 ```
 
 ```{r}
 screen_neg_no_match_aps   <- screen_neg %>% filter(is.na(case_num))
-n_screen_neg_no_match_aps <- nrow(screen_neg_no_match_aps) %>% format(big.mark = ",") # 1,014
+n_screen_neg_no_match_aps <- nrow(screen_neg_no_match_aps) %>% format(big.mark = ",") # 1,013
 ```
 
 ```{r}
@@ -184,7 +184,7 @@ Two of the incidents (id 491 and id 2608 weren't matched to APS investigations).
 
 ```{r}
 no_report_compliances   <- screen_pos_match_aps %>% filter(in_compliance_data == 0)
-n_no_report_compliances <- nrow(no_report_compliances) %>% format(big.mark = ",") # 13
+n_no_report_compliances <- nrow(no_report_compliances) %>% format(big.mark = ",") # 14
 ```
 
 ```{r}

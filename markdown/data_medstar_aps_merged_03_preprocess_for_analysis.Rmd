@@ -35,7 +35,7 @@ detect_5wk_1 <- feather::read_feather("../data/detect_5wk_1.feather")
 ```
 
 ```{r}
-about_data(detect_5wk_1) # 98,968 observations and 52 variables
+about_data(detect_5wk_1) # 99,051 observations and 52 variables
 ```
 
 
@@ -85,7 +85,7 @@ detect_5wk_2 %>%
 ```
 
 ```{r}
-about_data(detect_5wk_2) # 98,968 observations and 53 variables
+about_data(detect_5wk_2) # 99,051 observations and 53 variables
 ```
 
 
@@ -133,7 +133,7 @@ detect_5wk_2 <- detect_5wk_2 %>%
 ```
 
 ```{r}
-about_data(detect_5wk_2) # 98,968 observations and 80 variables
+about_data(detect_5wk_2) # 99,051 observations and 80 variables
 ```
 
 
@@ -163,6 +163,28 @@ detect_5wk_2 <- bind_cols(
 
 ```{r}
 about_data(detect_5wk_2) # 98,968 observations and 83 variables
+```
+
+
+## Create a match variable
+
+Create a dummy variable that is equal to 1 if the row corresponds to a DETECT screening that had a subsequent APS investigation and 0 otherwise.
+
+```{r}
+detect_5wk_2 <- detect_5wk_2 %>% 
+  mutate(match = if_else(detect_data == 1 & !is.na(case_num), 1, 0))
+```
+
+```{r}
+detect_5wk_2 %>% 
+  group_by(id) %>% 
+  filter(row_number() == 1) %>% 
+  ungroup() %>% 
+  summarise(`Number of Matches` = sum(match))
+```
+
+```{r}
+about_data(detect_5wk_2) # 99,051 observations and 84 variables"
 ```
 
 [top](#top)

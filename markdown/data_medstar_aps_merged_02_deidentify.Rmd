@@ -43,7 +43,7 @@ medstar_aps_merged <- feather::read_feather("/Volumes/Detect/medstar_aps_merged.
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 101,450 observations and 64 variables
+about_data(medstar_aps_merged) # 101,533 observations and 64 variables
 ```
 
 
@@ -98,7 +98,7 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 101,450 observations and 65 variables
+about_data(medstar_aps_merged) # 101,533 observations and 65 variables
 ```
 
 ```{r}
@@ -121,7 +121,7 @@ df_screened_only <- medstar_aps_merged %>% filter(detect_data == 1)
 ```
 
 ```{r}
-about_data(df_screened_only) # 64,981 observations and 65 variables
+about_data(df_screened_only) # 65,067 observations and 65 variables
 ```
 
 ```{r}
@@ -276,7 +276,7 @@ length(unique(df_screened_only$person_id)) # 1,126 matches above
 ```
 
 ```{r}
-about_data(df_screened_only) # 64,981 observations and 65 variables
+about_data(df_screened_only) # 65,067 observations and 65 variables
 ```
 
 
@@ -383,7 +383,7 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 101,450 observations and 66 variables
+about_data(medstar_aps_merged) # 101,533 observations and 66 variables
 ```
 
 
@@ -433,7 +433,7 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 98,968 observations and 66 variables
+about_data(medstar_aps_merged) # 99,051 observations and 66 variables
 ```
 
 
@@ -447,7 +447,7 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 98,968 observations and 67 variables
+about_data(medstar_aps_merged) # 99,051 observations and 67 variables
 ```
 
 
@@ -490,7 +490,7 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 98,968 observations and 67 variables
+about_data(medstar_aps_merged) # 99,051 observations and 67 variables
 ```
 
 
@@ -612,7 +612,7 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 98,968 observations and 51 variables
+about_data(medstar_aps_merged) # 99,051 observations and 51 variables
 ```
 
 
@@ -634,7 +634,7 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 98,968 observations and 51 variables
+about_data(medstar_aps_merged) # 99,051 observations and 51 variables
 ```
 
 
@@ -697,7 +697,7 @@ medstar_aps_merged <- medstar_aps_merged %>%
 ```
 
 ```{r}
-about_data(medstar_aps_merged) # 98,968 observations and 52 variables
+about_data(medstar_aps_merged) # 99,051 observations and 52 variables
 ```
 
 
@@ -746,14 +746,24 @@ Not including missing
 ```{r}
 medstar_aps_merged %>% 
   summarise(
-    `Total Rows` = n(), # 98,968
-    `Study IDs` = id %>% unique() %>% is.na() %>% `!` %>% sum(), # 2,611
+    `Total Rows` = n(), # 99,051
+    `Study IDs` = id %>% unique() %>% is.na() %>% `!` %>% sum(), # 2,609
     `Unique Incidents` = incident_call_number %>% unique() %>% is.na() %>% `!` %>% sum(), # 1,964
     `Unique PCR` = incident_pcr_number %>% unique() %>% is.na() %>% `!` %>% sum(), # 1,967
     `Unique Case Numbers` = case_num %>% unique() %>% is.na() %>% `!` %>% sum(), # 679
     `Unique People` = person_id %>% unique() %>% is.na() %>% `!` %>% sum() # 1,126
   ) %>% 
   mutate_all(format, big.mark = ",")
+```
+
+## Number of DETECT screenings matched to an APS investigation
+
+```{r}
+medstar_aps_merged %>% 
+  filter(detect_data == 1 & !is.na(case_num)) %>% 
+  group_by(id) %>% 
+  filter(row_number() == 1) %>% 
+  nrow() # 46
 ```
 
 [top](#top)
