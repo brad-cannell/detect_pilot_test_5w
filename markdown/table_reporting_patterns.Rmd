@@ -12,81 +12,92 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r load_packages, message=FALSE, echo=FALSE, warning=FALSE}
 # Load packages
 library(tidyverse)
+library(bfuncs)
 library(feather)
 
-source("../../R/label_qtext.R")
+source("../R/label_qtext.R")
 ```
 
 <!-- Load data -->
 
-<!-- medstar_detect_demo.feather was created in data_clean_medstar.Rmd     -->
-<!-- medstar_detect.feather was created in data_clean_medstar.Rmd    -->
-<!-- merged_screening_recode.RData was created in preprocess_for_analysis.Rmd    -->
+<!-- Deidentified 5-week pilot data. Created in data_medstar_aps_merged_03_preprocess_for_analysis.Rmd  -->
 
 ```{r echo=FALSE}
-medstar_dd <- read_feather("/Users/bradcannell/Desktop/medstar_detect_demo.feather")
-medstar_d  <- read_feather("/Users/bradcannell/Desktop/medstar_detect.feather")
-merged_sr  <- read_rds("/Users/bradcannell/Desktop/merged_screening_recode.RData")
+detect_5wk <- feather::read_feather("../data/detect_5wk.feather")
+```
+
+```{r include=FALSE}
+about_data(detect_5wk) # 99,051 observations and 84 variables
 ```
 
 <!-- Data management -->
 
 <!-- Currently, each row is an allegation. And, there can be multiple allegations per APS investigation. Each allegation has its own disposition. So, there can be multiple dispositions associated with an item for which "yes" was selected.  -->
 
-<!-- Select just the vars I need -->
-
 <!-- Create new variables for reported, any valid, any not valid, any unable to determine or other -->
 
 ```{r echo=FALSE}
-screening_disposition <- merged_sr %>% 
-  select(response_num, first_name, unusual_odor36:adls61, disposition) %>%  # Select vars of interest
+screening_disposition <- detect_5wk %>% 
+  
+  # Keep DETECT screenings matched to an investigation only
+  filter(match == 1) %>% 
+  
+  # Recode other
   mutate(
-    reported = 1,
     disposition = case_when(
-      disposition == "Unable to Determine" ~ "Other",                       # Recode other
+      disposition == "Unable to Determine" ~ "Other",
       disposition == "Other"               ~ "Other",
       TRUE                                 ~ disposition %>% as.character()
     )
   ) %>% 
-  group_by(response_num, first_name) %>% 
+  
+  # Create new variables for reported, any valid, any not valid, any unable to 
+  # determine or other
+  group_by(incident_pcr_number) %>% 
   mutate(
-    any_valid         = if_else(any(disposition == "Valid"),   1L, 0L),     # Create any / all vars
+    any_valid         = if_else(any(disposition == "Valid"),   1L, 0L),    
     all_invalid       = if_else(all(disposition == "Invalid"), 1L, 0L),
     disposition_other = if_else(any_valid == 0 & all_invalid == 0, 1L, 0L)
   ) %>% 
+  
+  # Keep one row per pcr
+  filter(row_number() == 1) %>%                                             
   ungroup() %>% 
-  group_by(response_num, first_name) %>% 
-  mutate(obs = row_number()) %>% 
-  filter(obs == 1) %>%                                                      # Keep one row per response/name
-  select(response_num, first_name, reported, any_valid, all_invalid, disposition_other)
+  
+  # For each screening item, create a new variable equal to 1 if "yes" was selected and 0 otherwise
+  mutate_at(
+    .vars = vars(unusual_odor36:adls61),
+    # 1 if Yes, 0 if anything else - including NA
+    .funs = funs(yes = case_when(. == "Yes" ~ 1L, TRUE ~ 0L))
+  )
 ```
 
 <!-- For each screening item, create a new variable equal to 1 if "yes" was selected and 0 otherwise -->
 
 ```{r echo=FALSE}
-yes_responses <- medstar_d %>% 
-  select(unusual_odor36:adls61) %>% 
-  mutate_all(
-    funs(
-      yes = case_when(. == "Yes" ~ 1L, TRUE ~ 0L) # 1 if Yes, 0 if anything else - including NA
-    )
-  )
+# yes_responses <- medstar_d %>% 
+#   select(unusual_odor36:adls61) %>% 
+#   mutate_all(
+#     funs(
+#       yes = case_when(. == "Yes" ~ 1L, TRUE ~ 0L) # 1 if Yes, 0 if anything else - including NA
+#     )
+#   )
 ```
 
 <!-- Merge yes responses back with response number, date, and first name -->
 
 ```{r echo=FALSE}
-id_date_name <- medstar_d %>% select(response_num, response_date, first_name)
-
-yes_responses <- bind_cols(id_date_name, yes_responses)
+# id_date_name <- medstar_d %>% select(response_num, response_date, first_name)
+# 
+# yes_responses <- bind_cols(id_date_name, yes_responses)
 ```
 
 <!-- Merge yes responses with disposition data -->
 
 ```{r echo=FALSE, warning=FALSE}
-yes_responses <- yes_responses %>% 
-  left_join(screening_disposition, by = c("response_num", "first_name")) %>% 
-  mutate(reported = if_else(is.na(reported), 0, reported))
+# yes_responses <- yes_responses %>% 
+#   left_join(screening_disposition, by = c("response_num", "first_name")) %>% 
+#   mutate(reported = if_else(is.na(reported), 0, reported))
 ```
 
 <!-- Make sure there are still 46 reports to APS -->
@@ -112,11 +123,11 @@ yes_responses <- yes_responses %>%
 
 ```{r echo=FALSE}
 table <- tibble(
-  Item                 = vector(mode = "character"),
-  Reported             = vector(mode = "character"),
-  `Reported - Valid`   = vector(mode = "character"),
-  `Reported - Invalid` = vector(mode = "character"),
-  `Reported - Other`   = vector(mode = "character")
+  Item                  = vector(mode = "character"),
+  Matched               = vector(mode = "character"),
+  `Valid Disposition`   = vector(mode = "character"),
+  `Invalid Disposition` = vector(mode = "character"),
+  `Other Disposition`   = vector(mode = "character")
 )
 ```
 
@@ -126,90 +137,116 @@ table <- tibble(
 table[1, ] <- c("", rep("N (%)", 4))
 ```
 
-<!-- Create function to return N and percent reported, reported and valid, reported and invalid, and reported and other - for each screening item -->
+<!-- Create function to return N reported, reported and valid, reported and invalid, and reported and other - for each screening item -->
 
 ```{r echo=FALSE}
-# For data checking - if needed
-# yes_responses %>%
-#   filter(unusual_odor36_yes == 1) %>%
-#   summarise(
-#     yes                  = nrow(.),
-#     reported             = sum(reported),
-#     reported_percent     = ((reported / yes) * 100) %>% round(1) %>% format(nsmall = 1L),
-#     Reported             = paste0(reported, " (", reported_percent, ")"),
-# 
-#     rv                   = sum(any_valid == 1, na.rm = TRUE),
-#     rv_percent           = ((rv / reported) * 100) %>% round(1) %>% format(nsmall = 1L),
-#     `Reported - Valid`   = paste0(rv, " (", rv_percent, ")"),
-# 
-#     ri                   = sum(all_invalid == 1, na.rm = TRUE),
-#     ri_percent           = ((ri / reported) * 100) %>% round(1) %>% format(nsmall = 1L),
-#     `Reported - Invalid` = paste0(ri, " (", ri_percent, ")"),
-# 
-#     ro                   = sum(disposition_other == 1, na.rm = TRUE),
-#     ro_percent           = ((ro / reported) * 100) %>% round(1) %>% format(nsmall = 1L),
-#     `Reported - Other`   = paste0(ro, " (", ri_percent, ")")
-#   )
+# For debugging - if needed
+# df       <- screening_disposition
+# accuracy <- .1
+# item     <- quo(cg_deceptive46)
+# yes      <- paste(quo_name(item), "yes", sep = "_") %>% rlang::sym()
+# df %>% 
+#   
+#     # Keep only the rows where "yes" was selected for each screening item
+#     filter(!!yes == 1) %>% 
+#     
+#     # Calculate stats of interest
+#     summarise(
+#       yes_and_matched = n(),
+#       
+#       matched_valid         = sum(any_valid),
+#       matched_valid_prop    = matched_valid / yes_and_matched,
+#       
+#       matched_invalid         = sum(all_invalid),
+#       matched_invalid_prop    = matched_invalid / yes_and_matched,
+#       
+#       matched_other         = sum(disposition_other),
+#       matched_other_prop    = matched_other / yes_and_matched
+#     ) %>% 
+#     
+#     # Deal with dividing by zero
+#     mutate_all(
+#       .funs = funs(if_else(is.nan(.), as.double(0), as.double(.)))
+#     ) %>% 
+#     
+#     # Format the output
+#     mutate(
+#       matched_valid_percent = scales::percent(matched_valid_prop, accuracy = accuracy),
+#       matched_invalid_percent = scales::percent(matched_invalid_prop, accuracy = accuracy),
+#       matched_other_percent = scales::percent(matched_other_prop, accuracy = accuracy),
+#       
+#       Matched               = format(yes_and_matched, big.mark = ","),
+#       `Valid Disposition`   = paste0(matched_valid, " (", matched_valid_percent, ")"),
+#       `Invalid Disposition` = paste0(matched_invalid, " (", matched_invalid_percent, ")"),
+#       `Other Disposition`   = paste0(matched_other, " (", matched_other_percent, ")")
+#     ) %>% 
+#     mutate(Item = !!quo_name(item)) %>% 
+#     select(Item, Matched:`Other Disposition`)
 ```
 
 ```{r echo=FALSE}
-count_reported_by_disposition <- function(df, column) {
+count_matched_by_disposition <- function(df, column, accuracy = .1) {
   
-  # append yesto end of var name and convert to quoture
+  # append yes to end of var name and convert to quoture
   item <- enquo(column)
   yes  <- paste(quo_name(item), "yes", sep = "_") %>% rlang::sym()
 
-  yes_responses %>% 
-    filter(rlang::UQ(yes) == 1) %>% 
+  df %>% 
+  
+    # Keep only the rows where "yes" was selected for each screening item
+    filter(!!yes == 1) %>% 
     
+    # Calculate stats of interest
     summarise(
-      yes                  = nrow(.),
-      reported             = sum(reported),
-      reported_percent     = ((reported / yes) * 100),
-      reported_percent     = if_else(is.nan(reported_percent), 0, reported_percent) %>% 
-                             round(1) %>% format(nsmall = 1L),
-      Reported             = paste0(reported, " (", reported_percent, ")"),
-    
-      rv                   = sum(any_valid == 1, na.rm = TRUE),
-      rv_percent           = ((rv / reported) * 100),
-      rv_percent           = if_else(is.nan(rv_percent), 0, rv_percent) %>% 
-                             round(1) %>% format(nsmall = 1L),
-      `Reported - Valid`   = paste0(rv, " (", rv_percent, ")"),
-    
-      ri                   = sum(all_invalid == 1, na.rm = TRUE),
-      ri_percent           = ((ri / reported) * 100),
-      ri_percent           = if_else(is.nan(ri_percent), 0, ri_percent)  %>% 
-                             round(1) %>% format(nsmall = 1L),
-      `Reported - Invalid` = paste0(ri, " (", ri_percent, ")"),
-    
-      ro                   = sum(disposition_other == 1, na.rm = TRUE),
-      ro_percent           = ((ro / reported) * 100),
-      ro_percent           = if_else(is.nan(ro_percent), 0, ro_percent) %>% 
-                             round(1) %>% format(nsmall = 1L),
-      `Reported - Other`   = paste0(ro, " (", ri_percent, ")")  
+      yes_and_matched = n(),
       
+      matched_valid         = sum(any_valid),
+      matched_valid_prop    = matched_valid / yes_and_matched,
+      
+      matched_invalid         = sum(all_invalid),
+      matched_invalid_prop    = matched_invalid / yes_and_matched,
+      
+      matched_other         = sum(disposition_other),
+      matched_other_prop    = matched_other / yes_and_matched
+    ) %>% 
+    
+    # Deal with dividing by zero
+    mutate_all(
+      .funs = funs(if_else(yes_and_matched == 0, as.double(0), as.double(.)))
+    ) %>% 
+    
+    # Format the output
+    mutate(
+      matched_valid_percent = scales::percent(matched_valid_prop, accuracy = accuracy),
+      matched_invalid_percent = scales::percent(matched_invalid_prop, accuracy = accuracy),
+      matched_other_percent = scales::percent(matched_other_prop, accuracy = accuracy),
+      
+      Matched               = format(yes_and_matched, big.mark = ","),
+      `Valid Disposition`   = paste0(matched_valid, " (", matched_valid_percent, ")"),
+      `Invalid Disposition` = paste0(matched_invalid, " (", matched_invalid_percent, ")"),
+      `Other Disposition`   = paste0(matched_other, " (", matched_other_percent, ")")
     ) %>% 
     mutate(Item = !!quo_name(item)) %>% 
-    select(Item, Reported, `Reported - Valid`, `Reported - Invalid`, `Reported - Other`)
+    select(Item, Matched:`Other Disposition`)
 
 }
-# count_reported_by_disposition(response_counts, unusual_odor36)
+# count_matched_by_disposition(screening_disposition, unusual_odor36)
 ```
 
 <!-- Loop over all screening items -->
 
 ```{r echo=FALSE}
-all_items <- medstar_d %>%                                                      # Select all screening items
+all_items <- screening_disposition %>%                                               # Select all screening items
   select(unusual_odor36:adls61) %>% 
   names()
 
-row <- 2                                                                        # Row index to start with
-columns <- 1:5                                                                  # Columns to fill in
+row <- 2                                                                             # Row index to start with
+columns <- 1:5                                                                       # Columns to fill in
 
-for(i in seq_along(all_items)) {                                                # Loop over each screening item
-  item <- rlang::sym(all_items[[i]])                                            # To "unquote" the column names
-  table[row, columns] <- count_reported_by_disposition(response_counts, !!item) # Fill in table
-  row <- row + 1                                                                # Increment row
+for(i in seq_along(all_items)) {                                                     # Loop over each screening item
+  item <- rlang::sym(all_items[[i]])                                                 # To "unquote" the column names
+  table[row, columns] <- count_matched_by_disposition(screening_disposition, !!item) # Fill in table
+  row <- row + 1                                                                     # Increment row
 }
 ```
 
