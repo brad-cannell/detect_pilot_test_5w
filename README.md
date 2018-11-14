@@ -1,4 +1,4 @@
-# Detection of Elder Abuse Through Emergency Care Technicians (DETECT) Pilot Study
+# Detection of Elder Abuse Through Emergency Care Technicians (DETECT) 5-Week Pilot Study
 
 ![](images/detect_under_construction.png)
 
