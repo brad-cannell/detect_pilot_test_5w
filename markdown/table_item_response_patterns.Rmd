@@ -114,7 +114,7 @@ table[1, ] <- c("", rep("N (%)", 5))
 #     percent_dk = scales::percent(prop_dk, accuracy = accuracy),
 #     
 #     yes_only_yes         = sum(!!yes == 1 & yes_count == 1),
-#     prop_yes_only_yes    = yes_only_yes / completed,
+#     prop_yes_only_yes    = yes_only_yes / yes, # When checked yes, what percentage of the time was it the only yes
 #     percent_yes_only_yes = scales::percent(prop_yes_only_yes, accuracy = accuracy)
 #   ) %>%
 # 
@@ -171,7 +171,7 @@ get_responses <- function(df, x, accuracy = .1) {
       percent_dk = scales::percent(prop_dk, accuracy = accuracy),
     
       yes_only_yes         = sum(!!yes == 1 & yes_count == 1),
-      prop_yes_only_yes    = yes_only_yes / completed,
+      prop_yes_only_yes    = yes_only_yes / yes,
       percent_yes_only_yes = scales::percent(prop_yes_only_yes, accuracy = accuracy)
     ) %>%
     
