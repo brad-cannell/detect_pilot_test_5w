@@ -281,7 +281,7 @@ table[2:27, 1] <- label_qtext()
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
 table_response_patterns_kable <- knitr::kable(table)
-write_rds(table_response_patterns_kable, path = "table_response_patterns_kable.rds") # Save
+write_rds(table_response_patterns_kable, path = "../data/table_response_patterns_kable.rds") # Save
 table_response_patterns_kable
 ```
 
