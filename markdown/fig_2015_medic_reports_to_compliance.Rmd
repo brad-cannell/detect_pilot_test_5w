@@ -1,5 +1,5 @@
 ---
-title: "Analysis of MedStar Reports to APS 2015"
+title: "Figure. Medic reports to APS that MedStar’s legal compliance department was made aware of, by month, 2015 (n = 49)."
 date: "Created: 2016-09-09 <br> Updated: `r Sys.Date()`"
 output: 
   html_notebook:
@@ -9,9 +9,9 @@ output:
 # Table of contents
 
 * [Overview](#overview)   
-* [Load packages](#load)   
+* [Load packages and data](#load)   
 * [Exploratory data analysis](#eda)   
-* [Figure 1. MedStar reports to APS by month](#figure1)   
+* [Figure. MedStar reports to APS by month](#figure1)   
 * [Summary](#summary)    
 
 
@@ -23,7 +23,7 @@ Figure 1, below, illustrates MedStar’s current standard operating procedure fo
 
 During the pilot study, all MedStar medics were given access to the pilot version of the DETECT screening tool through their Electronic Patient Care Reporting system (ePCR). In this analysis, we investigate all reports to APS in 2015 that were reported to the MedStar legal compliance department. We are primarily interested evaluating whether or not reports increased during the period of time that the pilot test occurred.
 
-**Figure 1.** Current medic reporting procedure.    
+## Current medic reporting procedure.    
 
 ![](../images/old_report_sop.png)
 
@@ -48,7 +48,11 @@ library(bfuncs)
 Reporting data from MedStar's compliance department. Cleaned in data_medstar_compliance_01_import.Rmd
 
 ```{r}
-medstar_compliance <- feather::read_feather("/Volumes/sph_research/Detect/medstar_compliance.feather")
+medstar_compliance <- feather::read_feather("/Volumes/DETECT/medstar_compliance.feather")
+```
+
+```{r}
+about_data(medstar_compliance) # 49 observations and 8 variables
 ```
 
 
@@ -182,7 +186,7 @@ medstar_compliance %>%
 
 
 
-# Figure 1. MedStar reports to APS by month {#figure1}
+# Figure. MedStar reports to APS by month {#figure1}
 
 ## Preliminary variable management
 
