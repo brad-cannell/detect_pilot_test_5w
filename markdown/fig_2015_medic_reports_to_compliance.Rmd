@@ -318,7 +318,7 @@ fig_medstar_reports_to_aps_2015
 
 ```{r}
 ggsave(
-  filename = "../images/fig_medstar_reports_to_aps_2015.png",
+  filename = "../images/fig_2015_medic_reports_to_compliance.png",
   plot     = fig_medstar_reports_to_aps_2015,
   device = "png",
   width = 11.43,
