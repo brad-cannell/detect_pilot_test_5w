@@ -27,7 +27,7 @@ detect_5wk <- feather::read_feather("../data/detect_5wk.feather")
 ```
 
 ```{r echo=FALSE, eval=FALSE}
-about_data(detect_5wk) # 99,051 observations and 84 variables
+about_data(detect_5wk) # 99,051 observations and 36 variables
 ```
 
 <!-- Data management -->
@@ -86,12 +86,13 @@ table[1, ] <- c("", rep("N (%)", 5))
 # Hitting the play button won't work because of include=FALSE
 
 # df        <- screenings_1row
+# accuracy  <- 0.1
 # item      <- quo(unusual_odor36)
 # completed <- paste(quo_name(item), "completed", sep = "_") %>% rlang::sym()
 # yes       <- paste(quo_name(item), "yes", sep = "_") %>% rlang::sym()
 # no        <- paste(quo_name(item), "no", sep = "_") %>% rlang::sym()
 # dk        <- paste(quo_name(item), "dk", sep = "_") %>% rlang::sym()
-
+# 
 # df %>%
 #   # Calculate stats of interest
 #   summarise(
@@ -112,7 +113,7 @@ table[1, ] <- c("", rep("N (%)", 5))
 #     dk         = sum(!!dk),
 #     prop_dk    = dk / completed,
 #     percent_dk = scales::percent(prop_dk, accuracy = accuracy),
-#     
+# 
 #     yes_only_yes         = sum(!!yes == 1 & yes_count == 1),
 #     prop_yes_only_yes    = yes_only_yes / yes, # When checked yes, what percentage of the time was it the only yes
 #     percent_yes_only_yes = scales::percent(prop_yes_only_yes, accuracy = accuracy)
@@ -133,7 +134,7 @@ table[1, ] <- c("", rep("N (%)", 5))
 # 
 #     dk           = format(dk, big.mark = ","),
 #     `Don't Know` = paste0(dk, " (", percent_dk, ")"),
-#     
+# 
 #     yes_only_yes     = format(yes_only_yes, big.mark = ","),
 #     `Yes - Only Yes` = paste0(yes_only_yes, " (", percent_yes_only_yes, ")")
 #   ) %>%
@@ -213,61 +214,6 @@ for(i in seq_along(all_items)) {                                # Loop over each
   item <- rlang::sym(all_items[[i]])                            # To "unquote" the column names
   table[row, columns] <- get_responses(screenings_1row, !!item) # Fill in table
   row <- row + 1                                                # Increment row
-}
-```
-
-<!-- Create function to return N and percent if yes, reported -->
-
-```{r include=FALSE}
-# For data checking - if needed
-# Hitting the play button won't work because of include=FALSE
-# screenings_1row %>%
-#   filter(unusual_odor36_yes == 1) %>%
-#   summarise(
-#     matched = sum(match),
-#     yes = nrow(.),
-#     percent = ((matched / yes) * 100) %>% round(1) %>% format(nsmall = 1L),
-#     `Yes - Reported` = paste0(matched, " (", percent, ")")
-#   )
-```
-
-```{r echo=FALSE}
-count_if_yes_reported <- function(df, column) {
-  
-  # append yes to end of var name and convert to quoture
-  item <- enquo(column)
-  yes  <- paste(quo_name(item), "yes", sep = "_") %>% rlang::sym()
-  
-  
-  df %>% 
-    filter(rlang::UQ(yes) == 1) %>% 
-    summarise(
-      matched = sum(match),
-      yes = nrow(.),
-      percent = ((matched / yes) * 100) %>% round(1) %>% format(nsmall = 1L),
-      `Yes - Matched` = paste0(matched, " (", percent, ")")
-    )%>% 
-    mutate(Item = !!quo_name(item)) %>% 
-    select(Item, `Yes - Matched`)
-  
-}
-# count_if_yes_reported(screenings_1row, unusual_odor36)
-```
-
-<!-- Loop over all screening items -->
-
-```{r echo=FALSE}
-all_items <- screenings_1row %>%                                           # Select all screening items
-  select(unusual_odor36:adls61) %>% 
-  names()
-
-row <- 2                                                                   # Row index to start with
-columns <- 6                                                               # Columns to fill in
-
-for(i in seq_along(all_items)) {                                           # Loop over each screening item
-  item <- rlang::sym(all_items[[i]])                                       # To "unquote" the column names
-  table[row, columns] <- count_if_yes_reported(screenings_1row, !!item)[2] # Fill in table
-  row <- row + 1                                                           # Increment row
 }
 ```
 

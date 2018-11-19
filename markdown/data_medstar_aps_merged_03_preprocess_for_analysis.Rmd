@@ -12,6 +12,7 @@ output:
 * [Load packages and data](#load)   
 * [Variable management](#var-manage)    
 * [Save preprocessed data](#save)    
+* [Requirements for upload to NACJD](#nacjd)   
 
 # Overview
 
@@ -198,14 +199,52 @@ about_data(detect_5wk_2) # 99,051 observations and 84 variables"
 
 
 
+# Requirements for upload to NACJD {#nacjd}
+
+* [NACJD Submission Guidelines](https://www.icpsr.umich.edu/icpsrweb/content/NACJD/archiving/deposit-nij-data.html)
+
+* Submit cleaned, final, and de-identified data meeting the following criteria:
+
+    * All direct identifiers must be removed from the dataset unless consent was explicitly provided for the purpose of archiving.
+    
+    * Indirect identifiers should be recoded to prohibit re-identification
+    
+    * Submit only data used in the analysis eliminating all unused and unnecessary content in comment fields before submission.
+
+```{r}
+detect_5wk_3 <- detect_5wk_2 %>%
+  select(id, incident_pcr_number, validation, detect_data, crew_member_id, answered_count,
+         case_num, yes_any, in_compliance_data, unusual_odor36:adls61, yes_count)
+```
+
+```{r}
+about_data(detect_5wk_3) # 99,051 observations and 36 variables
+```
+
+[top]
+
+
+
+
+
+
+
+
+
+
 # Save preprocessed data {#save}
 
 This should be the version that will be posted on [NACJD]( https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html)
 
 ```{r}
-feather::write_feather(detect_5wk_2, "../data/detect_5wk.feather")
+feather::write_feather(detect_5wk_3, "../data/detect_5wk.feather")
 ```
 
+## NACJD wants SPSS files
+
+```{r}
+haven::write_sav(detect_5wk_3, "../data/detect_5wk.sav")
+```
 
 ## Clean up
 
