@@ -246,6 +246,12 @@ feather::write_feather(detect_5wk_3, "../data/detect_5wk.feather")
 haven::write_sav(detect_5wk_3, "../data/detect_5wk.sav")
 ```
 
+## Also create CSV file
+
+```{r}
+readr::write_csv(detect_5wk_3, "../data/detect_5wk.csv")
+```
+
 ## Clean up
 
 ```{r}
