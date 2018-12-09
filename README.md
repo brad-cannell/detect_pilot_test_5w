@@ -1,84 +1,42 @@
 # Detection of Elder Abuse Through Emergency Care Technicians (DETECT) 5-Week Pilot Study
 
-![](images/detect_under_construction.png)
+# Background about the DETECT project
 
-## Background
+In collaboration with [Texas Adult Protective Services (APS)](https://www.dfps.state.tx.us/Adult_Protection/) and one of the largest mobile healthcare providers in North Texas — [MedStar Mobile Healthcare (MedStar)](http://www.medstar911.org/) — our team developed and piloted an EA screening tool: Detection of Elder Abuse Through Emergency Care Technicians (DETECT). The DETECT tool was designed specifically to help medics identify potential EA among community-dwelling older adults during an emergency response. DETECT relies entirely on the medics’ systematic observations of the older adults’ physical and social environment — no direct questioning of the older adult or their caregivers is involved. The intent was to create an EA screening tool that was easy for medics to use in the field and that helped medics capture information about older adults, their environments, and their caregivers that is thought to be associated with the occurrence of EA. 
 
-Detection of Elder Abuse Through Emergency Care Technicians (DETECT) is a U.S. National Institute of Justice funded project designed to help first responders – especially EMTs and paramedics – identify potential cases of elder abuse and neglect in the community. This repository outlines the methods we used to evaluate that pilot test.
+We pilot tested using the DETECT screening tool with medics in the field between September 17th and October 26th, 2015. During the pilot test, MedStar’s Electronic Patient Care Reporting system (ePCR) was programmed to automatically prompt all medics to complete an EA screening using the DETECT tool while on an eligible 911 response. An eligible 911 response was defined as a call for a community-dwelling patient who was 65 years of age or older, the setting was the patient’s residence, and the patient resided in the community (e.g., private home, unlicensed adult foster homes, unlicensed board and care homes, etc.). Other types of residences (e.g., licensed skilled nursing facilities) were excluded because reports of EA in these settings are generally not investigated by APS in Texas. By definition, older adults who participated in the pilot study had to live in MedStar’s service area of an estimated (978,000 residents), which included Fort Worth, Texas, and 14 surrounding communities.
 
-## Methods
-
-The pilot test took place from September 17th, 2015 to October 26th, 2015 in Tarrant County (Fort Worth) Texas. All medics (EMTs and paramedics) completed the screening tool when they responded to a call for a community-dwelling patient who was 65 years of age or older, and medics were instructed to contact APS based on screening tool results. Frequency of change in medic reporting was evaluated, along with the predictive performance of the individual screening items.
-
-![](images/flow_diagram.png)
-
-_Flow diagram illustrating which data sources were used for each analysis, and how final sample sizes were derived._
-
-## Results
-
-MedStar successfully integrated the DETECT screening questions into its ePCR and pilot-tested the DETECT screening tool for over a month. During that time, the screening tool was used 1,248 times by 97% of the medics who responded to a qualified 911 call. Medics selected a “yes” response to at least one screening item on 209 out of the completed screenings (16.8%). Immediately following the introduction of the DETECT screening tool, there was an increase of 3.6 (152% above baseline) validated reports per month (p < 0.0001).
-
-## Conclusions
-
-EMS providers encounter older adults who are living with EA. Identification of EA cases by medics is facilitated by incorporation of the DETECT tool into the ePCR and may enhance medics’ efforts for early detection of EA in community dwelling older adults.
-
+This repository contains all the data analysis code our team used to evaluate the DETECT 5-week pilot study. Or findings are published in the [Journal of Elder Abuse and Neglect](https://www.tandfonline.com/loi/wean20).
 
 # DETECT pilot data
 
 Deidentified data collected during the DETECT pilot study are available from [NACJD](https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html).
 
+[Codebook for the deidentified DETECT 5-week pilot study data](https://www.dropbox.com/s/vmruaeayiig4usu/codebook_detect_5wk.docx?dl=0)
+
+## Figure 1. A flow diagram illustrating the DETECT pilot study screening and reporting procedures.
+
+![](images/fig_detect_5wk_screening_and_reporting_flow_diagram.jpg)
+
+## Figure 2. A flow diagram illustrating which data sources were used for each analysis.
+
+![](images/project_file_flow_diagram/Slide1.jpeg)
+
+![](images/project_file_flow_diagram/Slide2.jpeg)
 
 # Data cleaning and analysis codes
 
-For more information about our analysis process and results, please click in the individual code file of interest below:
+You can use the file tree near the top of the page to view and/or download any of the programming code we used to manage and analyze data for this project. Additionally, the links below will take you directly to the code we used to generate the results that we believe will be of greatest interest to many people viewing this repository.
 
+[Figure 3. Qualified responses and completed screenings over the duration of the DETECT pilot study (9-17-2015 to 10-26-2015)](https://www.dropbox.com/s/h9zl71ry1l57eh8/fig_responses_screenings_validation_line_graph.nb.html?dl=0)
 
-## Data cleaning code
+[Analyses related to procedural feasibility](https://www.dropbox.com/s/ueuicrqfml2kder/analysis_detect_5wk_01_feasibility.nb.html?dl=0)
 
-[Process used to clean data from MedStar](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/data_01_clean_medstar.nb.html)
+[Table 1. Response patterns for each of the 26 DETECT screening item.](https://github.com/brad-cannell/detect_pilot_test_5w/blob/master/markdown/table_item_response_patterns.Rmd)
 
-* Data from MedStar that contains all uses of the DETECT screening tool
+[Figure 4. Medic reports to APS that MedStar’s legal compliance department was made aware of, by month, 2015 (n = 49)](https://www.dropbox.com/s/2ciev5f7yzxjiex/fig_2015_medic_reports_to_compliance.nb.html?dl=0)
 
-* Data from MedStar that includes demographic and health information for all patients who where age >= 65 and treated during the pilot period
-
-[Process used to clean the APS Investigations data](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/data_02_clean_aps.nb.html)
-
-* Client information
-
-* [Abuse/Neglect Allegations](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_1340.asp#APS_1340)
-
-* [Investigation dispositions](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2700.asp#APS_2700)
-
-* [Investigation closure reasons](http://www.dfps.state.tx.us/handbooks/APS/Files/APS_pg_2800.asp#APS_2900)
-
-[Process used to Link records in the cleaned MedStar data with records in the cleaned APS data](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/data_03_merge_medstar_aps.nb.html)
-
-[Processed used to preprocess merged data for analysis](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/data_04_preprocess_merged_for_analysis.nb.html)
-
-* Variable manipulation and recode missing.
-
-* Save deidentified versions of data    
-
-
-## Analysis code
-
-[Analysis of all known MedStar reports to APS in 2015](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/analysis_medstar_reports_to_aps_2015.nb.html)
-
-[Demographic characteristics of the sample of older adults who were screened by MedStar using the DETECT tool during the phase 1 pilot test](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/analysis_describe_screened_patients.nb.html)
-
-[Characteristics of the APS investigations that we were able to link to DETECT screenings](https://rawgit.com/brad-cannell/detect_pilot_test/master/markdown/analysis_characteristics_of_investigations.nb.html)
-
-[Analysis of the individual screening tool items]()
-
-[Feasibility analysis]()
-
-
-# Codebooks
-
-[MedStar Screening Data (medstar\_nid)]()
-
-[DETECT Pilot Test Data (detect\_p)]()
-
+[Change in EA Reporting Frequency](https://github.com/brad-cannell/detect_pilot_test_5w/blob/master/sas/DETECT_code_for_Change_in_Reporting.sas)
 
 # APS Handbook
 
