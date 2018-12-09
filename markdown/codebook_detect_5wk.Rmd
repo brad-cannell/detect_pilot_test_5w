@@ -1,0 +1,319 @@
+---
+title: "Codebook For Deidentified Data Submitted to NACJD"
+date: "Created: 2018-11-16 <br> Updated: `r Sys.Date()`"
+output: 
+  html_notebook:
+    css: custom-css.css
+---
+
+# Table of contents
+
+* [Overview](#overview)   
+* [Load packages and data](#load)   
+* [Add column attributes](#add-attributes)   
+* [Create description of the data](#description)   
+* [Create codebook document](#create)
+
+
+# Overview
+
+This file creates a codebook for the DETECT 5-week pilot study data that will be submitted to [NACJD](https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html)
+
+
+# Load packages and data {#load}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+Sys.setenv(TZ = "US/Central")
+```
+
+```{r message=FALSE}
+library(tidyverse)
+library(bfuncs)
+```
+
+```{r}
+detect_5wk <- readr::read_csv("../data/detect_5wk.csv", col_types = cols())
+```
+
+
+
+
+
+
+
+
+# Add column attributes {#add-attributes}
+
+Get a chunk of code for each column in the data and then copy and paste below
+
+```{r eval=FALSE}
+for (i in seq_along(names(detect_5wk))) {
+cat(paste0('
+  codebook_add_col_attributes( \n    ',
+    names(detect_5wk)[i], ', \n    ',
+    'description = ""
+  ) %>%
+'))
+}
+```
+
+
+```{r}
+detect_5wk <- detect_5wk %>% 
+  
+  # The source for most columns was the MedStar data. Start by setting the source for
+  # all columns to "MedStar patient records" and change below as needed.
+  purrr::map_dfc( ~ {attr(., "source") <- "MedStar patient records"; .}) %>% 
+  
+  # Most columns are categorical. Start by setting col_type to categorical for all. 
+  # Change below as needed.
+  purrr::map_dfc( ~ {attr(., "col_type") <- "Categorical"; .}) %>% 
+
+  # Now set the rest of the needed attributes
+  codebook_add_col_attributes(
+    id,
+    description = "Study identification variable",
+    source = "This variable was created as part of the deidentification process. This variable identifies unique MedStar emergency responses and/or APS investigations."
+  ) %>%
+
+  codebook_add_col_attributes(
+    incident_pcr_number,
+    description = "Uniquely identifies a single patient record at a given MedStar response. Missing for rows that come from the APS investigations data and do not have a match in the MedStar patient records."
+  ) %>%
+
+   codebook_add_col_attributes(
+    validation,
+    description = "A dummy variable that indicates if the MedStar validation rule was implemented or not",
+    source = "Calculated: 0 if the MedStar response date was before 2015-09-28, 1 if on or after 2015-09-28."
+  ) %>%
+
+  codebook_add_col_attributes(
+    detect_data,
+    description = "A dummy variable that indicates if there is a DETECT screening associated with the current incident PCR number",
+    source = "Calculated: 1 if there is an associated DETECT screening, 0 otherwise."
+  ) %>% 
+  
+  codebook_add_col_attributes( 
+    crew_member_id, 
+    description = "Uniquely identifies MedStar medics. Missing for rows that come from the APS investigations data and do not have a match in the MedStar patient records."
+  ) %>%
+
+  codebook_add_col_attributes( 
+    answered_count, 
+    description = "Number of non-missing responses to the DETECT screening questions for a given incident PCR number",
+    source = "Calculated: Row sum of non-missing responses to DETECT screening question columns",
+    col_type = "numeric"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    case_num, 
+    description = "Uniquely identifies an APS investigation. Missing for rows that come from the MedStar patient records and do not have a match in the APS investigations data.",
+    source = "APS client records"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    yes_any, 
+    description = "A dummy variable that indicates if there was a 'yes' response for any one or more of the DETECT screening items associated with the current incident PCR number",
+    source = "Calculated: 1 if one or more 'yes' responses, 0 otherwise."
+  ) %>%
+
+  codebook_add_col_attributes( 
+    in_compliance_data, 
+    description = "A dummy variable that indicates if the current incident PCR number had an associated record in the MedStar compliance data.",
+    source = "Calculated: 1 if there is an associated record, 0 otherwise."
+  ) %>%
+
+  codebook_add_col_attributes( 
+    unusual_odor36, 
+    description = "Unusual odor (e.g. urine, feces)"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    no_utils37, 
+    description = "One or more utilities are not operational (no water electric, heating/cooling)"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    hoarding38, 
+    description = "Inside of the home is in extreme disarray / hoarding"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    safe_env39, 
+    description = "Living environment poses a health or safety concern (e.g. fire hazard, insect or rodent infestation, urine or feces present)"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    alc_containers40, 
+    description = "Open alcohol containers or other alcohol/drug paraphernalia present"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    cg_lack_know41, 
+    description = "If caregiver(s) present, they appear to lack knowledge of the patient/older adult's medical need(s)"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    cg_unengaged42, 
+    description = "If caregiver(s) present, they appear unengaged and inattentive in caring for the patient/older adult"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    cg_frustrated43, 
+    description = "If caregiver(s) present, they appear frustrated, tired, angry, or burdened by the patient/older adult"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    cg_overwhelmed44, 
+    description = "If caregiver(s) present, they appear overwhelmed by the patient / older adult"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    cg_too_conerned45, 
+    description = "If caregiver(s) present, they appear overly concerned (e.g. anxious, hovering)"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    cg_deceptive46, 
+    description = "If caregiver(s) present, they appear to be deceptive or withhold information from you"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    cg_bad_info47, 
+    description = "If caregiver(s) present, they appear to give you information that is inconsistent with the patient / older adult's account"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    cg_alcdrugs48, 
+    description = "If caregiver(s) present, they appear to be under the influence of alcohol and/or illicit drugs"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    cg_dependent49, 
+    description = "If caregiver(s) present, they appear to be dependent on the patient / older adult for financial or other needs"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    socsup50, 
+    description = "If caregiver(s) present, does the patient / older adult appear to lack social support or family that cares for them"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    no_talk51, 
+    description = "If caregiver(s) present, does the patient / older adult hesitate to talk with you or discuss their condition in front of the caregiver"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    isolated52, 
+    description = "Is/Does the patient/older adult isolated in the home"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    suspicious_injuries53, 
+    description = "Is/Does the patient/older adult have suspicious falls, wounds, and/or injuries"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    old_injuries54, 
+    description = "Is/Does the patient/older adult show evidence of any old injuries that have been left untreated"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    alcdrugs55, 
+    description = "Is/Does the patient/older adult under the influence of alcohol and/or illicit drugs"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    emo_distress56, 
+    description = "Is/Does the patient/older adult appear depressed, anxious, or emotionally distressed for reasons other than their immediate medical condition"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    poor_hygiene57, 
+    description = "Is/Does the patient/older adult have poor personal hygiene (including soiled in urine or feces)"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    clothing58, 
+    description = "Is/Does the patient/older adult inadequately clothed or wearing dirty, torn, or soiled clothing"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    taking_meds59, 
+    description = "Is/Does the patient/older adult have difficulties taking their prescribed medications as directed"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    saving_meds60, 
+    description = "Is/Does the patient/older adult appear to be hoarding/saving old medications"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    adls61, 
+    description = "Is/Does the patient/older adult need assistance with eating, toileting, transferring, dressing, or bathing"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    yes_count, 
+    description = "Count of 'yes' responses to the DETECT screening questions for a given incident PCR number",
+    source = "Calculated: Row sum of 'yes' responses to DETECT screening question columns",
+    col_type = "numeric"
+  )
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Create description of the data {#description}
+
+```{r}
+description <- "In collaboration with Texas Adult Protective Services (APS) and one of the largest mobile healthcare providers in North Texas — MedStar Mobile Healthcare (MedStar) — our team developed and piloted an EA screening tool: Detection of Elder Abuse Through Emergency Care Technicians (DETECT). The DETECT tool was designed specifically to help medics identify potential EA among community-dwelling older adults during an emergency response. DETECT relies entirely on the medics’ systematic observations of the older adults’ physical and social environment — no direct questioning of the older adult or their caregivers is involved. The intent was to create an EA screening tool that was easy for medics to use in the field and that helped medics capture information about older adults, their environments, and their caregivers that is thought to be associated with the occurrence of EA. 
+
+We pilot tested using the DETECT screening tool with medics in the field between September 17th and October 26th, 2015. During the pilot test, MedStar’s Electronic Patient Care Reporting system (ePCR) was programmed to automatically prompt all medics to complete an EA screening using the DETECT tool while on an eligible 911 response. An eligible 911 response was defined as a call for a community-dwelling patient who was 65 years of age or older, the setting was the patient’s residence, and the patient resided in the community (e.g., private home, unlicensed adult foster homes, unlicensed board and care homes, etc.). Other types of residences (e.g., licensed skilled nursing facilities) were excluded because reports of EA in these settings are generally not investigated by APS in Texas. By definition, older adults who participated in the pilot study had to live in MedStar’s service area of an estimated (978,000 residents), which included Fort Worth, Texas, and 14 surrounding communities."
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Create codebook document {#create}
+
+```{r}
+codebook_detect_5wk <- codebook(
+  df = detect_5wk,
+  path = "../data/detect_5wk.csv",
+  title = "Detection of Elder abuse Through Emergency Care Technicians (DETECT)",
+  subtitle = "5-Week Pilot Study",
+  description = description
+)
+```
+
+```{r}
+print(codebook_detect_5wk, target = "codebook_detect_5wk.docx")
+```
+
+[top](#top)
+
+&nbsp;
+
+-------------------------------------------------------------------------------
+
+```{r echo=FALSE}
+sessionInfo()
+```
