@@ -391,7 +391,7 @@ for (i in vars) {
 ## Save in .sav format
 
 ```{r}
-haven::write_sav(detect_sav, "../data/detect_sav.sav")
+haven::write_sav(detect_sav, "../data/detect_5wk.sav")
 ```
 
 [top](#top)
