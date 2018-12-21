@@ -20,6 +20,22 @@ output:
 This file creates a codebook for the DETECT 5-week pilot study data that will be submitted to [NACJD](https://www.icpsr.umich.edu/icpsrweb/content/NACJD/index.html)
 
 
+## Update 2018_12-19:
+On 2018-12-18 I got an email from Chelsea at NACJD:
+
+Hi Brad,
+Thank you for your deposit to NACJD for NIJ grant #2014-MU-CX-0102. In 
+addition to the CSV data file you have submitted, would it be possible for us 
+to obtain an SPSS, SAS, or Stata version of your data file with all variable 
+names, variable labels, values, and value labels embedded within the file? 
+This will make the data file more accessible for secondary users. Please let 
+me know, and if you are able to provide this, I will reopen your deposit 
+workspace so that you can upload the file there.
+
+We can add the variable labels and value labels using attributes. We do so
+below, and save the df as a .dta file to be uploaded to NACJD.
+
+
 # Load packages and data {#load}
 
 ```{r setup, include=FALSE}
@@ -306,6 +322,76 @@ codebook_detect_5wk <- codebook(
 
 ```{r}
 print(codebook_detect_5wk, target = "codebook_detect_5wk.docx")
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Create labelled SPSS dataset for NACJD
+
+Below we:   
+* Add value labels   
+* Convert the description attribute to the label attribute   
+* Add the "haven_labelled_spss" "haven_labelled" class   
+* The only three attributes each column should have are labels, class, and label
+
+
+## Create value labels
+
+```{r}
+standard01_ <- c("No" = 0, "Yes" = 1)
+```
+
+```{r}
+detect_sav <- detect_5wk %>% 
+  
+  # First, set the value labels
+  mutate(
+    validation = haven::labelled_spss(validation, standard01_),
+    detect_data = haven::labelled_spss(detect_data, standard01_),
+    yes_any = haven::labelled_spss(yes_any, standard01_),
+    in_compliance_data = haven::labelled_spss(in_compliance_data, standard01_)
+  ) %>% 
+  
+  # Convert the description attribute to the label attribute
+  purrr::map_dfc( ~ {attr(., "label") <- attr(., "description"); .})
+  
+  # Convert select categorical numeric variables to character
+  # purrr::map_at(
+  #   .at = c("id", "incident_pcr_number", "crew_member_id", "case_num"),
+  #   .f = as.character
+  # ) %>% 
+  
+  # Add integer format to numeric variables
+  # purrr::map_at(
+  #   .at = c("validation", "detect_data", "answered_count", "yes_any", "in_compliance_data", "yes_count")
+  # )
+```
+
+
+## Add integer format to numeric variables
+
+```{r}
+vars <- c("id", "incident_pcr_number", "validation", "detect_data", "crew_member_id", "answered_count", 
+          "case_num", "yes_any", "in_compliance_data", "yes_count")
+for (i in vars) {
+  attr(detect_sav[[i]], "format.spss") <- "F8.0"
+}
+```
+
+
+## Save in .sav format
+
+```{r}
+haven::write_sav(detect_sav, "../data/detect_sav.sav")
 ```
 
 [top](#top)
