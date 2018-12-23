@@ -1,0 +1,355 @@
+---
+title: "Create labelled SPSS dataset for NACJD"
+date: "Created: 2018-12-21 <br> Updated: `r Sys.Date()`"
+output: 
+  html_notebook:
+    toc: true
+    css: custom-css.css
+---
+
+# Overview
+
+On 2018-12-18 I got an email from Chelsea at NACJD:
+
+Hi Brad,
+Thank you for your deposit to NACJD for NIJ grant #2014-MU-CX-0102. In 
+addition to the CSV data file you have submitted, would it be possible for us 
+to obtain an SPSS, SAS, or Stata version of your data file with all variable 
+names, variable labels, values, and value labels embedded within the file? 
+This will make the data file more accessible for secondary users. Please let 
+me know, and if you are able to provide this, I will reopen your deposit 
+workspace so that you can upload the file there.
+
+We can add the variable labels and value labels using attributes. We do so
+below, and save the df as a .dta file to be uploaded to NACJD.
+
+# Load packages and data
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA)
+Sys.setenv(TZ = "US/Central")
+```
+
+```{r message=FALSE}
+library(tidyverse)
+library(bfuncs)
+```
+
+```{r}
+detect_5wk <- feather::read_feather("../data/detect_5wk.feather")
+```
+
+```{r}
+about_data(detect_5wk) # 99,051 observations and 36 variables
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Convert character columns to numeric
+
+On 2018-12-21 I got an email from Chelsea at NACJD: 
+
+Thank you so much for working on this, it's much appreciated! I just opened the file, and do have a request. Are you able to submit a file that has the numeric values (e.g., 0, 1) in each of the cells rather than the string values (e.g., yes and no)? The value labels should be identified in the "values" column in SPSS (e.g., 0 = no, 1 = yes). We request the data in this format so that it can be easily manipulated in all of the various stats packages, and when the data are in string format instead of numeric, this becomes much more challenging.
+
+```{r}
+detect_5wk <- detect_5wk %>% 
+  purrr::map_dfc(
+    function(x) {
+      x[x == "No"] <- 0
+      x[x == "Yes"] <- 1
+      x[x == "Don’t Know"] <- 3
+      x[x == "Not applicable or No Caregiver"] <- 4
+      x <- as.numeric(x)
+      x
+    }
+  )
+```
+
+```{r}
+# detect_5wk %>% 
+#   group_by(no_talk51) %>% 
+#   freq_table()
+```
+
+[top](#top)
+
+
+
+
+
+
+
+
+
+
+# Add column attributes
+
+
+## Create value labels
+
+```{r}
+standard01_ <- c("No" = 0, "Yes" = 1)
+y_n_dk <- c("No" = 0, "Yes" = 1, "Don’t Know" = 3)
+y_n_dk_ncg <- c("No" = 0, "Yes" = 1, "Don’t Know" = 3, "Not applicable or No Caregiver" = 4)
+```
+
+
+## Add value labels
+
+```{r}
+detect_sav <- detect_5wk %>% 
+  
+  mutate_at(
+    .vars = vars(validation, detect_data, yes_any, in_compliance_data),
+    .funs = funs(haven::labelled_spss(., standard01_))
+  ) %>% 
+  
+  mutate_at(
+    .vars = vars(unusual_odor36:socsup50, isolated52:adls61),
+    .funs = funs(haven::labelled_spss(., y_n_dk))
+  ) %>% 
+  
+  mutate(no_talk51 = haven::labelled_spss(no_talk51, y_n_dk_ncg))
+```
+
+
+## Add column labels
+
+Get a chunk of code for each column in the data and then copy and paste below
+
+```{r eval=FALSE}
+for (i in seq_along(names(detect_5wk))) {
+cat(paste0('
+  codebook_add_col_attributes( \n    ',
+    names(detect_5wk)[i], ', \n    ',
+    'label = ""
+  ) %>%
+'))
+}
+```
+
+```{r}
+detect_sav <- detect_sav %>% 
+
+  codebook_add_col_attributes(
+    id,
+    label = "Study identification variable"
+  ) %>%
+
+  codebook_add_col_attributes(
+    incident_pcr_number,
+    label = "Uniquely identifies a single patient record at a given MedStar response. Missing for rows that come from the APS investigations data and do not have a match in the MedStar patient records."
+  ) %>%
+
+   codebook_add_col_attributes(
+    validation,
+    label = "A dummy variable that indicates if the MedStar validation rule was implemented or not"
+  ) %>%
+
+  codebook_add_col_attributes(
+    detect_data,
+    label = "A dummy variable that indicates if there is a DETECT screening associated with the current incident PCR number"
+  ) %>% 
+  
+  codebook_add_col_attributes( 
+    crew_member_id, 
+    label = "Uniquely identifies MedStar medics. Missing for rows that come from the APS investigations data and do not have a match in the MedStar patient records."
+  ) %>%
+
+  codebook_add_col_attributes( 
+    answered_count, 
+    label = "Number of non-missing responses to the DETECT screening questions for a given incident PCR number"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    case_num, 
+    label = "Uniquely identifies an APS investigation. Missing for rows that come from the MedStar patient records and do not have a match in the APS investigations data."
+  ) %>%
+
+  codebook_add_col_attributes( 
+    yes_any, 
+    label = "A dummy variable that indicates if there was a 'yes' response for any one or more of the DETECT screening items associated with the current incident PCR number"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    in_compliance_data, 
+    label = "A dummy variable that indicates if the current incident PCR number had an associated record in the MedStar compliance data."
+  ) %>%
+
+  codebook_add_col_attributes( 
+    unusual_odor36, 
+    label = "Unusual odor (e.g. urine, feces)"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    no_utils37, 
+    label = "One or more utilities are not operational (no water electric, heating/cooling)"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    hoarding38, 
+    label = "Inside of the home is in extreme disarray / hoarding"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    safe_env39, 
+    label = "Living environment poses a health or safety concern (e.g. fire hazard, insect or rodent infestation, urine or feces present)"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    alc_containers40, 
+    label = "Open alcohol containers or other alcohol/drug paraphernalia present"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    cg_lack_know41, 
+    label = "If caregiver(s) present, they appear to lack knowledge of the patient/older adult's medical need(s)"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    cg_unengaged42, 
+    label = "If caregiver(s) present, they appear unengaged and inattentive in caring for the patient/older adult"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    cg_frustrated43, 
+    label = "If caregiver(s) present, they appear frustrated, tired, angry, or burdened by the patient/older adult"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    cg_overwhelmed44, 
+    label = "If caregiver(s) present, they appear overwhelmed by the patient / older adult"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    cg_too_conerned45, 
+    label = "If caregiver(s) present, they appear overly concerned (e.g. anxious, hovering)"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    cg_deceptive46, 
+    label = "If caregiver(s) present, they appear to be deceptive or withhold information from you"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    cg_bad_info47, 
+    label = "If caregiver(s) present, they appear to give you information that is inconsistent with the patient / older adult's account"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    cg_alcdrugs48, 
+    label = "If caregiver(s) present, they appear to be under the influence of alcohol and/or illicit drugs"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    cg_dependent49, 
+    label = "If caregiver(s) present, they appear to be dependent on the patient / older adult for financial or other needs"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    socsup50, 
+    label = "If caregiver(s) present, does the patient / older adult appear to lack social support or family that cares for them"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    no_talk51, 
+    label = "If caregiver(s) present, does the patient / older adult hesitate to talk with you or discuss their condition in front of the caregiver"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    isolated52, 
+    label = "Is/Does the patient/older adult isolated in the home"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    suspicious_injuries53, 
+    label = "Is/Does the patient/older adult have suspicious falls, wounds, and/or injuries"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    old_injuries54, 
+    label = "Is/Does the patient/older adult show evidence of any old injuries that have been left untreated"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    alcdrugs55, 
+    label = "Is/Does the patient/older adult under the influence of alcohol and/or illicit drugs"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    emo_distress56, 
+    label = "Is/Does the patient/older adult appear depressed, anxious, or emotionally distressed for reasons other than their immediate medical condition"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    poor_hygiene57, 
+    label = "Is/Does the patient/older adult have poor personal hygiene (including soiled in urine or feces)"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    clothing58, 
+    label = "Is/Does the patient/older adult inadequately clothed or wearing dirty, torn, or soiled clothing"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    taking_meds59, 
+    label = "Is/Does the patient/older adult have difficulties taking their prescribed medications as directed"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    saving_meds60, 
+    label = "Is/Does the patient/older adult appear to be hoarding/saving old medications"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    adls61, 
+    label = "Is/Does the patient/older adult need assistance with eating, toileting, transferring, dressing, or bathing"
+  ) %>%
+
+  codebook_add_col_attributes( 
+    yes_count, 
+    label = "Count of 'yes' responses to the DETECT screening questions for a given incident PCR number"
+  )
+```
+
+
+## Add integer format to numeric variables
+
+```{r}
+detect_sav <- detect_sav %>% 
+  purrr::map_dfc(
+    function(x) {
+      if (is.numeric(x)) {
+        attr(x, "format.spss") <- "F8.0"
+      }
+      x
+    }
+  )
+```
+
+
+# Save in .sav format
+
+```{r}
+haven::write_sav(detect_sav, "../data/detect_5wk.sav")
+```
+
+[top](#top)
+
+
+&nbsp;
+
+-------------------------------------------------------------------------------
+
+```{r echo=FALSE}
+sessionInfo()
+```
